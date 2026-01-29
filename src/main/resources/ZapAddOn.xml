@@ -1,0 +1,17 @@
+
+<zapaddon>
+    <name>AI Traffic Analyst</name>
+    <version>1.0.0</version>
+    <semver>1.0.0</semver>
+    <status>alpha</status>
+    <description>AI-driven traffic analysis using local LLMs.</description>
+    <author>Jeremy</author>
+    
+    <not-before>2.15.0</not-before>
+    <not-from>3.0.0</not-from>
+
+    <extensions>
+        <extension>org.zaproxy.zap.extension.aitrafficanalyst.ExtensionAiAnalyst</extension>
+    </extensions>
+</zapaddon>
+
