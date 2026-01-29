@@ -46,93 +46,51 @@ The generated `.zap` bundle will be placed in `build/zapAddOn/bin/`. Drag-and-dr
 
 ## VIBE CODED
 
-### Human-in-the-Loop Vibe Coding Process
-
-I use a deliberate **Human-in-the-Loop (HITL)** workflow to keep control of design, security assumptions, and intent while letting agents handle implementation details.
-
-1. **Ideation & Discovery**  
-	I start with the Planning Agent using a prompt like:  
-	> *“I’m thinking of making an XYZ project. Ask me questions to help plan and design this out.”*  
-	This forces clarity before any code is written.
-
-2. **Architecture & Breakdown**  
-	I ask the Planning Agent to produce a **reviewable architecture and development plan**, broken down into:
-	- Major development phases
-	- Sub-tasks per phase  
-	I explicitly remind the agent:  
-
-  > *“I’m a security engineer, not a programmer — explain this in terms I can understand.”*
-
-3. **Human Approval Gate**  
-	I review, question, and approve the plan **before** any implementation begins.
-
-4. **Execution by Coding Agent**
-
-	The approved planning prompt is passed to the Coding Agent, with instructions to:
-	- Implement only the approved phase or sub-task
-	- Return a **completion summary** explaining:
-	  - What was done
-	  - Which phase/sub-task was completed
-
-5. **Review & Refinement**  
-	Results are sent back to the Planning Agent for:
-	- Review
-	- Design feedback
-	- Security considerations
-	- Follow-up questions or suggested changes
-
-6. **Iterative Loop**  
-	Steps 4–5 repeat until the project converges.
-
-This loop keeps the system **intent-driven, explainable, and auditable**, while still moving fast — and without pretending I suddenly became a full-time software engineer.
-
-## VIBE CODED
-
 This project was *vibe-coded into existence*.  
 I am not a traditional programmer — and I’m unapologetic about it.
 
-- **Planning Agent:** Gemini 3 Pro
-- **Coding Agent:** GPT-5-mini
+- **Planning Agent:** Gemini 3 Pro 
+- **Coding Agent:** GPT-5-mini  
 
 ### Human-in-the-Loop Vibe Coding Process
 
-I use a deliberate **Human-in-the-Loop (HITL)** workflow to keep control of design, security assumptions, and intent while letting agents handle implementation details.
+I use a deliberate **Human-in-the-Loop (HITL)** workflow to keep control of design,
+security assumptions, and intent while letting agents handle implementation details.
 
 1. **Ideation & Discovery**  
-	I start with the Planning Agent using a prompt like:  
-	> *“I’m thinking of making an XYZ project. Ask me questions to help plan and design this out.”*  
-	This forces clarity before any code is written.
+   I start with the Planning Agent using a prompt like:  
+   > *“I’m thinking of making an XYZ project. Ask me questions to help plan and design this out.”*  
+   This forces clarity before any code is written.
 
 2. **Architecture & Breakdown**  
-	I ask the Planning Agent to produce a **reviewable architecture and development plan**, broken down into:
-	- Major development phases
-	- Sub-tasks per phase  
-	I explicitly remind the agent:  
-
-  > *“I’m a security engineer, not a programmer — explain this in terms I can understand.”*
+   I ask the Planning Agent to produce a **reviewable architecture and development plan**, broken down into:
+   - Major development phases
+   - Sub-tasks per phase  
+   I explicitly remind the agent:  
+   > *“I’m a security engineer, not a programmer — explain this in terms I can understand.”*
 
 3. **Human Approval Gate**  
-	I review, question, and approve the plan **before** any implementation begins.
+   I review, question, and approve the plan **before** any implementation begins.
 
-4. **Execution by Coding Agent**
-
-	The approved planning prompt is passed to the Coding Agent, with instructions to:
-	- Implement only the approved phase or sub-task
-	- Return a **completion summary** explaining:
-	  - What was done
-	  - Which phase/sub-task was completed
+4. **Execution by Coding Agent**  
+   The approved planning prompt is passed to the Coding Agent, with instructions to:
+   - Implement only the approved phase or sub-task
+   - Return a **completion summary** explaining:
+     - What was done
+     - Which phase/sub-task was completed
 
 5. **Review & Refinement**  
-	Results are sent back to the Planning Agent for:
-	- Review
-	- Design feedback
-	- Security considerations
-	- Follow-up questions or suggested changes
+   Results are sent back to the Planning Agent for:
+   - Review
+   - Design feedback
+   - Security considerations
+   - Follow-up questions or suggested changes
 
 6. **Iterative Loop**  
-	Steps 4–5 repeat until the project converges.
+   Steps 4–5 repeat until the project converges.
 
-This loop keeps the system **intent-driven, explainable, and auditable**, while still moving fast — and without pretending I suddenly became a full-time software engineer.
+This loop keeps the system **intent-driven, explainable, and auditable**, while still
+moving fast — and without pretending I suddenly became a full-time software engineer.
 
 ---
 
