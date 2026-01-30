@@ -28,10 +28,20 @@ A high-performance, local-LLM-powered security analysis add-on for OWASP ZAP. Th
 ```bash
 git clone https://github.com/your-username/aitrafficanalyst.git
 cd aitrafficanalyst
-./gradlew clean copyZapAddon
+./gradlew clean jarZapAddOn
 ```
 
-The generated `.zap` bundle will be placed in `build/zapAddOn/bin/`. Drag-and-drop that file into a running ZAP instance (Help → Check for Updates → Local add-on or the ZAP add-on manager).
+The generated `.zap` bundle will be placed in `build/zapAddOn/bin/`.
+
+Common dev commands:
+
+```bash
+./gradlew spotlessApply
+./gradlew test
+./gradlew jarZapAddOn
+```
+
+Install the add-on in ZAP via **Manage Add-ons → Install Add-on from File…** and select the `.zap` file in `build/zapAddOn/bin/`.
 
 ---
 
@@ -39,8 +49,8 @@ The generated `.zap` bundle will be placed in `build/zapAddOn/bin/`. Drag-and-dr
 
 1. Configure: Tools → Options → AI Traffic Analyst. Set the Ollama URL, choose a model and adjust the system prompt.
 2. Refresh Models: Click `Refresh Models` in the Options panel to query available models from your Ollama instance.
-3. Analyze: Right-click any request in ZAP History and choose **Analyze**. The add-on will clone and resend the request to collect a live response, then send the combined request+response to the local model.
-4. Review: Results stream into the **AI Analysis** tab (Markdown-rendered). Use `Save Report` or `Clear All` in the panel toolbar.
+3. Analyze: Right-click any request in ZAP History and choose **AI Analyst**. The add-on will clone and resend the request to collect a live response, then send the combined request+response to the local model.
+4. Review: Results stream into the **AI Analysis** tab. 
 
 ---
 
