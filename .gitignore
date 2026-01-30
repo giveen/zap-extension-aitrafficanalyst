@@ -47,5 +47,8 @@ coverage/
 # Generated files
 /.gradle/
 
+# Local todo
+todo.md
+
 # Lock files
 gradle.lockfile
