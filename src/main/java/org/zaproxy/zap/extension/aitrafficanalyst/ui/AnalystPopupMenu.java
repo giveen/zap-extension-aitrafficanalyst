@@ -23,8 +23,28 @@ public class AnalystPopupMenu extends PopupMenuItemHttpMessageContainer {
     private static final Logger LOGGER = LogManager.getLogger(AnalystPopupMenu.class);
 
     public AnalystPopupMenu(ExtensionAiAnalyst ext) {
-        super(org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.menu.analyze"));
+        this(null, ext);
+    }
+
+    public AnalystPopupMenu(String label, ExtensionAiAnalyst ext) {
+        super(label != null && !label.isEmpty() ? label : org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.menu.analyze"));
         this.extension = ext;
+        LOGGER.debug("AnalystPopupMenu created with label='{}'", label);
+    }
+
+    @Override
+    public boolean isSubMenu() {
+        return true;
+    }
+
+    @Override
+    public String getParentMenuName() {
+        return Constant.messages.getString("aitrafficanalyst.menu.aiAnalyst");
+    }
+
+    @Override
+    public int getParentWeight() {
+        return 1000;
     }
 
     @Override
@@ -275,6 +295,8 @@ public class AnalystPopupMenu extends PopupMenuItemHttpMessageContainer {
 
     @Override
     public boolean isEnableForInvoker(Invoker invoker, HttpMessageContainer httpMessageContainer) {
+        LOGGER.debug("AnalystPopupMenu.isEnableForInvoker called; invoker={}, hasContainer={}",
+                invoker == null ? "null" : invoker.name(), httpMessageContainer != null);
         return true;
     }
 

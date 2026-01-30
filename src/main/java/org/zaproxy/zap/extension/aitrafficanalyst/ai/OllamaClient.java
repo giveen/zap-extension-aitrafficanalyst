@@ -1,15 +1,34 @@
+/*
+ * Zed Attack Proxy (ZAP) and its related class files.
+ *
+ * ZAP is an HTTP/HTTPS proxy for assessing web application security.
+ *
+ * Copyright 2026 The ZAP Development Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.zaproxy.zap.extension.aitrafficanalyst.ai;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 import okhttp3.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import java.io.IOException;
-import java.util.concurrent.TimeUnit;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Iterator;
 
 public class OllamaClient {
 
@@ -43,17 +62,16 @@ public class OllamaClient {
             this.generateEndpoint = b + "api/generate";
             this.tagsEndpoint = b + "api/tags";
         }
-        this.client = new OkHttpClient.Builder()
-                .connectTimeout(60, TimeUnit.SECONDS)
-                .readTimeout(120, TimeUnit.SECONDS) // AI can be slow
-                .writeTimeout(60, TimeUnit.SECONDS)
-                .build();
+        this.client =
+                new OkHttpClient.Builder()
+                        .connectTimeout(60, TimeUnit.SECONDS)
+                        .readTimeout(120, TimeUnit.SECONDS) // AI can be slow
+                        .writeTimeout(60, TimeUnit.SECONDS)
+                        .build();
         this.mapper = new ObjectMapper();
     }
 
-    /**
-     * Construct an OllamaClient using a shared OkHttpClient instance.
-     */
+    /** Construct an OllamaClient using a shared OkHttpClient instance. */
     public OllamaClient(OkHttpClient sharedClient, String baseUrl) {
         this.baseUrl = baseUrl;
         String b = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
@@ -76,10 +94,7 @@ public class OllamaClient {
     }
 
     public List<String> getModels() throws IOException {
-        Request request = new Request.Builder()
-            .url(this.tagsEndpoint)
-                .get()
-                .build();
+        Request request = new Request.Builder().url(this.tagsEndpoint).get().build();
 
         try (Response response = client.newCall(request).execute()) {
             if (!response.isSuccessful()) {
@@ -104,17 +119,15 @@ public class OllamaClient {
     public String query(String modelName, String promptText) throws IOException {
         // Build JSON Payload
         // We use "stream": false so we get the full response at once
-        String jsonBody = mapper.createObjectNode()
-                .put("model", modelName)
-                .put("prompt", promptText)
-                .put("stream", false)
-                .toString();
+        String jsonBody =
+                mapper.createObjectNode()
+                        .put("model", modelName)
+                        .put("prompt", promptText)
+                        .put("stream", false)
+                        .toString();
 
         RequestBody body = RequestBody.create(jsonBody, JSON);
-        Request request = new Request.Builder()
-            .url(this.generateEndpoint)
-            .post(body)
-            .build();
+        Request request = new Request.Builder().url(this.generateEndpoint).post(body).build();
 
         try (Response response = client.newCall(request).execute()) {
             if (!response.isSuccessful()) {
@@ -123,7 +136,7 @@ public class OllamaClient {
 
             String responseBody = response.body().string();
             JsonNode rootNode = mapper.readTree(responseBody);
-            
+
             // Extract the actual 'response' text from Ollama's JSON
             if (rootNode.has("response")) {
                 return rootNode.get("response").asText();

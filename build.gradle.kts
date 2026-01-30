@@ -1,5 +1,7 @@
+import org.gradle.api.file.DuplicatesStrategy
+import org.gradle.api.tasks.bundling.Jar
+import org.gradle.language.jvm.tasks.ProcessResources
 import org.zaproxy.gradle.addon.AddOnStatus
-import org.zaproxy.gradle.addon.misc.ConvertMarkdownToHtml
 
 plugins {
     `java-library`
@@ -14,21 +16,38 @@ tasks.named("generateZapAddOnManifest") {
         val manifestFile = file("${project.buildDir}/resources/main/ZapAddOn.xml")
         if (manifestFile.exists()) {
             var content = manifestFile.readText()
-            
+
             // Inject <not-before-version> to fix ZAP loading error
             if (!content.contains("not-before-version")) {
                 content = content.replace("</author>", "</author>\n    <not-before-version>2.15.0</not-before-version>")
             }
-            
-            // Inject <semver> 
+
+            // Inject <semver>
             if (!content.contains("semver")) {
-                 content = content.replace("<version>1.0.0</version>", "<version>1.0.0</version>\n    <semver>1.0.0</semver>")
+                val versionMatch = Regex("<version>([^<]+)</version>").find(content)
+                val version = versionMatch?.groupValues?.get(1)
+                if (version != null) {
+                    content =
+                        content.replaceFirst(
+                            "<version>$version</version>",
+                            "<version>$version</version>\n    <semver>$version</semver>",
+                        )
+                }
             }
-            
+
             manifestFile.writeText(content)
             println("Manually patched ZapAddOn.xml with version constraints.")
         }
     }
+}
+
+// The add-on Gradle plugin generates ZapAddOn.xml; exclude the template copy to avoid duplicates.
+tasks.named<ProcessResources>("processResources") {
+    exclude("ZapAddOn.xml")
+}
+
+tasks.named<Jar>("jar") {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 // (Manifest post-processing will be appended at the end of the file)

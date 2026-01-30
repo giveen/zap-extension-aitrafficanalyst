@@ -1,8 +1,8 @@
 
 <zapaddon>
     <name>AI Traffic Analyst</name>
-    <version>1.0.0</version>
-    <semver>1.0.0</semver>
+    <version>1.0.6</version>
+    <semver>1.0.6</semver>
     <status>alpha</status>
     <description>AI-driven traffic analysis using local LLMs.</description>
     <author>Jeremy</author>

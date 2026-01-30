@@ -1,27 +1,26 @@
 package org.zaproxy.zap.extension.aitrafficanalyst;
 
-import org.parosproxy.paros.Constant;
-import org.parosproxy.paros.extension.ExtensionAdaptor;
-import org.parosproxy.paros.extension.ExtensionHook;
-import org.parosproxy.paros.model.Model;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import okhttp3.OkHttpClient;
-import java.time.Duration;
-import org.zaproxy.zap.extension.aitrafficanalyst.ui.AnalystPanel;
 import javax.swing.ImageIcon;
+import okhttp3.OkHttpClient;
+import org.parosproxy.paros.Constant;
+import org.parosproxy.paros.extension.ExtensionAdaptor;
+import org.parosproxy.paros.extension.ExtensionHook;
 import org.zaproxy.zap.extension.aitrafficanalyst.ui.AnalystOptionsPanel;
+import org.zaproxy.zap.extension.aitrafficanalyst.ui.AnalystPanel;
 import org.zaproxy.zap.extension.aitrafficanalyst.ui.AnalystPopupMenu;
 
 public class ExtensionAiAnalyst extends ExtensionAdaptor {
 
     public static final String NAME = "ExtensionAiAnalyst";
     private static final Logger LOGGER = LogManager.getLogger(ExtensionAiAnalyst.class);
-    
+
     private AnalystPanel analystPanel;
     private AnalystOptions options;
     private ExecutorService executor;
@@ -79,8 +78,10 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
             AnalystOptionsPanel optionsPanel = new AnalystOptionsPanel(this);
             optionsPanel.init();
             extensionHook.getHookView().addOptionPanel(optionsPanel);
-            
-            // Register Popup Menu
+
+            // Register popup menu items.
+            // The submenu structure is created by ZAP itself when menu items return isSubMenu() == true
+            // and provide a parent menu name.
             extensionHook.getHookMenu().addPopupMenuItem(new AnalystPopupMenu(this));
         }
     }
