@@ -45,10 +45,13 @@ import org.commonmark.renderer.html.HtmlRenderer;
 import org.jsoup.Jsoup;
 import org.jsoup.safety.Safelist;
 import org.parosproxy.paros.extension.AbstractPanel;
+import org.zaproxy.zap.extension.aitrafficanalyst.ExtensionAiAnalyst;
 
 public class AnalystPanel extends AbstractPanel {
 
     private static final long serialVersionUID = 1L;
+
+    private transient ExtensionAiAnalyst extension;
     private JEditorPane resultArea;
     private StringBuilder fullHistoryMarkdown = new StringBuilder();
     private static final Parser MARKDOWN_PARSER = Parser.builder().build();
@@ -60,6 +63,15 @@ public class AnalystPanel extends AbstractPanel {
 
     public AnalystPanel() {
         super();
+    }
+
+    public AnalystPanel(ExtensionAiAnalyst extension) {
+        super();
+        this.extension = extension;
+    }
+
+    public void setExtension(ExtensionAiAnalyst extension) {
+        this.extension = extension;
     }
 
     public void init() {
@@ -154,6 +166,25 @@ public class AnalystPanel extends AbstractPanel {
                                 "aitrafficanalyst.btn.clear"));
         btnClear.addActionListener(e -> clearAnalysis());
         toolBar.add(btnClear);
+
+        JButton btnClearMemory = new JButton("Clear Memory");
+        btnClearMemory.setToolTipText("Wipe the AI's session context buffer (last 5 findings).");
+        btnClearMemory.setEnabled(this.extension != null);
+        btnClearMemory.addActionListener(
+                e -> {
+                    if (this.extension == null) {
+                        return;
+                    }
+
+                    this.extension.clearSessionContext();
+                    JOptionPane.showMessageDialog(
+                            this,
+                            "Session memory cleared!",
+                            "AI Analyst",
+                            JOptionPane.INFORMATION_MESSAGE);
+                });
+        toolBar.add(btnClearMemory);
+
         JButton btnSave =
                 new JButton(
                         org.parosproxy.paros.Constant.messages.getString(
@@ -278,5 +309,34 @@ public class AnalystPanel extends AbstractPanel {
         if (resultArea != null) {
             resultArea.requestFocusInWindow();
         }
+    }
+
+    /**
+     * Builds a session-aware system prompt by injecting recent findings from the current ZAP
+     * session.
+     *
+     * <p>This is intentionally UI-adjacent (panel-owned) so the panel can participate in prompt
+     * assembly while keeping the session memory stored in the extension.
+     */
+    public String buildSessionAwareSystemPrompt(ExtensionAiAnalyst extension, String basePrompt) {
+        String previousContext =
+                extension != null ? extension.getSessionContextFormatted() : "None.";
+        StringBuilder systemPrompt = new StringBuilder();
+        systemPrompt
+                .append("You are an OWASP security expert.\n")
+                .append("--- SESSION CONTEXT (Previous findings in this session) ---\n")
+                .append(previousContext)
+                .append("\n")
+                .append("-----------------------------------------------------------\n");
+
+        if (basePrompt != null && !basePrompt.trim().isEmpty()) {
+            systemPrompt.append(basePrompt.trim()).append("\n");
+        } else {
+            systemPrompt
+                    .append("Analyze the following HTTP request for vulnerabilities...")
+                    .append("\n");
+        }
+
+        return systemPrompt.toString();
     }
 }

@@ -24,6 +24,9 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.net.InetAddress;
 import java.net.URI;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
@@ -44,8 +47,16 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
     private static final long serialVersionUID = 1L;
     private org.zaproxy.zap.utils.ZapTextField txtOllamaUrl;
     private JComboBox<String> cboModelName;
-    private JTextArea txtSystemPrompt;
+    private JComboBox<String> cboRole;
+    private JButton btnAddRole;
+    private JButton btnDeleteRole;
+    private JTextArea txtRolePrompt;
     private transient ExtensionAiAnalyst extension;
+
+    // Local edits are staged here and only persisted on Save.
+    private final transient Map<String, String> editedRoles = new LinkedHashMap<>();
+    private String editedActiveRole;
+    private boolean suppressRoleEvents;
 
     public AnalystOptionsPanel(ExtensionAiAnalyst extension) {
         this.extension = extension;
@@ -118,16 +129,59 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
         gbc.weightx = 1.0;
         this.add(modelPanel, gbc);
 
-        // Row 3: System Prompt Label + TextArea
-        JLabel lblPrompt =
+        // Row 3: Role selector + add/delete
+        JLabel lblRole =
                 new JLabel(
                         org.parosproxy.paros.Constant.messages.getString(
-                                "aitrafficanalyst.options.systemPrompt"));
-        txtSystemPrompt = new JTextArea(5, 60);
-        JScrollPane promptScroll = new JScrollPane(txtSystemPrompt);
+                                "aitrafficanalyst.options.role"));
+        cboRole = new JComboBox<>();
+
+        btnAddRole =
+                new JButton(
+                        org.parosproxy.paros.Constant.messages.getString(
+                                "aitrafficanalyst.options.role.add"));
+        btnDeleteRole =
+                new JButton(
+                        org.parosproxy.paros.Constant.messages.getString(
+                                "aitrafficanalyst.options.role.delete"));
+
+        JPanel rolePanel = new JPanel(new GridBagLayout());
+        GridBagConstraints roleGbc = new GridBagConstraints();
+        roleGbc.gridx = 0;
+        roleGbc.weightx = 1.0;
+        roleGbc.fill = GridBagConstraints.HORIZONTAL;
+        rolePanel.add(cboRole, roleGbc);
+
+        roleGbc.gridx = 1;
+        roleGbc.weightx = 0.0;
+        roleGbc.insets = new Insets(0, 4, 0, 0);
+        rolePanel.add(btnAddRole, roleGbc);
+
+        roleGbc.gridx = 2;
+        rolePanel.add(btnDeleteRole, roleGbc);
 
         gbc.gridx = 0;
         gbc.gridy = 2;
+        gbc.weightx = 0.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weighty = 0.0;
+        this.add(lblRole, gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        this.add(rolePanel, gbc);
+
+        // Row 4: Role Prompt Label + TextArea
+        JLabel lblPrompt =
+                new JLabel(
+                        org.parosproxy.paros.Constant.messages.getString(
+                                "aitrafficanalyst.options.role.prompt"));
+        txtRolePrompt = new JTextArea(8, 60);
+        JScrollPane promptScroll = new JScrollPane(txtRolePrompt);
+
+        gbc.gridx = 0;
+        gbc.gridy = 3;
         gbc.weightx = 0.0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         this.add(lblPrompt, gbc);
@@ -164,18 +218,124 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
                 });
 
         gbc.gridx = 0;
-        gbc.gridy = 3;
+        gbc.gridy = 4;
         gbc.gridwidth = 2;
         gbc.weightx = 0.0;
         gbc.fill = GridBagConstraints.NONE;
         this.add(btnReset, gbc);
 
-        // Spacer to push everything up (now row 4)
-        gbc.gridy = 4;
+        // Spacer to push everything up (now row 5)
+        gbc.gridy = 5;
         gbc.gridx = 0;
         gbc.gridwidth = 2;
         gbc.weighty = 0.0;
         this.add(new JPanel(), gbc);
+
+        // Wire role UI actions.
+        cboRole.addActionListener(
+                e -> {
+                    if (suppressRoleEvents) {
+                        return;
+                    }
+                    String selected = (String) cboRole.getSelectedItem();
+                    if (selected == null) {
+                        return;
+                    }
+                    stageCurrentRolePrompt();
+                    editedActiveRole = selected;
+                    txtRolePrompt.setText(editedRoles.getOrDefault(selected, ""));
+                    updateRoleButtonsState();
+                });
+
+        btnAddRole.addActionListener(
+                e -> {
+                    String roleName =
+                            JOptionPane.showInputDialog(
+                                    this,
+                                    org.parosproxy.paros.Constant.messages.getString(
+                                            "aitrafficanalyst.options.role.add.prompt"),
+                                    org.parosproxy.paros.Constant.messages.getString(
+                                            "aitrafficanalyst.options.role.add.title"),
+                                    JOptionPane.QUESTION_MESSAGE);
+                    if (roleName == null) {
+                        return;
+                    }
+                    roleName = roleName.trim();
+                    if (roleName.isEmpty()) {
+                        return;
+                    }
+                    if (editedRoles.containsKey(roleName)) {
+                        JOptionPane.showMessageDialog(
+                                this,
+                                org.parosproxy.paros.Constant.messages.getString(
+                                        "aitrafficanalyst.options.role.add.duplicate"),
+                                "",
+                                JOptionPane.WARNING_MESSAGE);
+                        return;
+                    }
+
+                    stageCurrentRolePrompt();
+                    editedRoles.put(roleName, "");
+                    rebuildRoleCombo(roleName);
+                });
+
+        btnDeleteRole.addActionListener(
+                e -> {
+                    String selected = (String) cboRole.getSelectedItem();
+                    if (selected == null) {
+                        return;
+                    }
+                    if (AnalystOptions.DEFAULT_ROLE.equals(selected)) {
+                        return;
+                    }
+                    int confirm =
+                            JOptionPane.showConfirmDialog(
+                                    this,
+                                    org.parosproxy.paros.Constant.messages.getString(
+                                            "aitrafficanalyst.options.role.delete.confirm"),
+                                    org.parosproxy.paros.Constant.messages.getString(
+                                            "aitrafficanalyst.options.role.delete.title"),
+                                    JOptionPane.YES_NO_OPTION);
+                    if (confirm != JOptionPane.YES_OPTION) {
+                        return;
+                    }
+                    editedRoles.remove(selected);
+                    if (Objects.equals(editedActiveRole, selected)) {
+                        editedActiveRole = AnalystOptions.DEFAULT_ROLE;
+                    }
+                    rebuildRoleCombo(editedActiveRole);
+                });
+    }
+
+    private void updateRoleButtonsState() {
+        String selected = (String) cboRole.getSelectedItem();
+        btnDeleteRole.setEnabled(selected != null && !AnalystOptions.DEFAULT_ROLE.equals(selected));
+    }
+
+    private void stageCurrentRolePrompt() {
+        if (editedActiveRole == null) {
+            return;
+        }
+        editedRoles.put(editedActiveRole, txtRolePrompt.getText());
+    }
+
+    private void rebuildRoleCombo(String roleToSelect) {
+        suppressRoleEvents = true;
+        cboRole.removeAllItems();
+        for (String role : editedRoles.keySet()) {
+            cboRole.addItem(role);
+        }
+        if (roleToSelect != null && editedRoles.containsKey(roleToSelect)) {
+            cboRole.setSelectedItem(roleToSelect);
+            editedActiveRole = roleToSelect;
+            txtRolePrompt.setText(editedRoles.getOrDefault(roleToSelect, ""));
+        } else {
+            cboRole.setSelectedItem(AnalystOptions.DEFAULT_ROLE);
+            editedActiveRole = AnalystOptions.DEFAULT_ROLE;
+            txtRolePrompt.setText(editedRoles.getOrDefault(AnalystOptions.DEFAULT_ROLE, ""));
+        }
+        updateRoleButtonsState();
+        suppressRoleEvents = false;
     }
 
     private void fetchModels() {
@@ -368,7 +528,20 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
 
         txtOllamaUrl.setText(options.getOllamaUrl());
         cboModelName.setSelectedItem(options.getModelName());
-        txtSystemPrompt.setText(options.getSystemPrompt());
+
+        // Stage roles locally (do not persist until Save).
+        editedRoles.clear();
+        editedRoles.putAll(options.getRoles());
+        editedActiveRole = options.getActiveRole();
+        if (editedRoles.isEmpty()) {
+            editedRoles.put(
+                    AnalystOptions.DEFAULT_ROLE,
+                    options.getRolePrompt(AnalystOptions.DEFAULT_ROLE));
+        }
+        if (editedActiveRole == null || !editedRoles.containsKey(editedActiveRole)) {
+            editedActiveRole = AnalystOptions.DEFAULT_ROLE;
+        }
+        rebuildRoleCombo(editedActiveRole);
     }
 
     @Override
@@ -381,9 +554,21 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
                     "Ollama URL is invalid. Only localhost/loopback addresses are allowed for security reasons.");
         }
 
+        // Persist current role prompt before saving.
+        stageCurrentRolePrompt();
+        if (editedRoles.isEmpty()) {
+            editedRoles.put(
+                    AnalystOptions.DEFAULT_ROLE,
+                    options.getRolePrompt(AnalystOptions.DEFAULT_ROLE));
+        }
+        if (editedActiveRole == null || !editedRoles.containsKey(editedActiveRole)) {
+            editedActiveRole = AnalystOptions.DEFAULT_ROLE;
+        }
+
         options.setOllamaUrl(url);
         options.setModelName((String) cboModelName.getSelectedItem());
-        options.setSystemPrompt(txtSystemPrompt.getText());
+        options.setRoles(editedRoles);
+        options.setActiveRole(editedActiveRole);
     }
 
     private boolean isAllowedOllamaUrl(String url) {
