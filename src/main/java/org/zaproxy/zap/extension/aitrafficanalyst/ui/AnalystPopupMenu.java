@@ -80,6 +80,9 @@ public class AnalystPopupMenu extends PopupMenuItemHttpMessageContainer {
     public void performAction(HttpMessage msg) {
         try {
             if (msg != null) {
+                if (extension != null && extension.getAnalystPanel() != null) {
+                    extension.getAnalystPanel().setLastMessage(msg);
+                }
                 String url = msg.getRequestHeader().getURI().toString();
                 String actualMethod = msg.getRequestHeader().getMethod();
 

@@ -40,16 +40,16 @@ public class AnalystOptions extends AbstractParam {
     private String ollamaUrl = "http://localhost:11434/";
     private String modelName = "llama3:70b";
 
-        // Default persona names
-        private static final String ROLE_STANDARD = "Standard Analyst";
-        private static final String ROLE_RED_TEAM = "Red Teamer (Offensive)";
-        private static final String ROLE_SKEPTIC = "False Positive Hunter";
-        private static final String ROLE_API = "API Logic Expert";
+    // Default persona names
+    private static final String ROLE_STANDARD = "Standard Analyst";
+    private static final String ROLE_RED_TEAM = "Red Teamer (Offensive)";
+    private static final String ROLE_SKEPTIC = "False Positive Hunter";
+    private static final String ROLE_API = "API Logic Expert";
 
-        public static final String DEFAULT_ROLE = ROLE_STANDARD;
+    public static final String DEFAULT_ROLE = ROLE_STANDARD;
 
-        private static final String PROMPT_STANDARD =
-                "You are a battle-hardened web security researcher dissecting any HTTP/HTTPS traffic—single request/response, HAR files, WebSocket streams, traffic sequences, or full session captures.\n"
+    private static final String PROMPT_STANDARD =
+            "You are a battle-hardened web security researcher dissecting any HTTP/HTTPS traffic—single request/response, HAR files, WebSocket streams, traffic sequences, or full session captures.\n"
                     + "\n"
                     + "### Adapt your analysis to the input format ###\n"
                     + "- Single Request/Response → Static analysis\n"
@@ -77,8 +77,8 @@ public class AnalystOptions extends AbstractParam {
                     + "\n"
                     + "- 3. [Same format]\n";
 
-        private static final String PROMPT_RED_TEAM =
-                "You are a blackhat-turned-RedTeam operator. Goal: EXPLOITATION. No theory, no CVSS scores, just payloads that work.\n"
+    private static final String PROMPT_RED_TEAM =
+            "You are a blackhat-turned-RedTeam operator. Goal: EXPLOITATION. No theory, no CVSS scores, just payloads that work.\n"
                     + "\n"
                     + "Given this HTTP traffic, weaponize the FIRST realistic attack path\n"
                     + "\n"
@@ -106,8 +106,8 @@ public class AnalystOptions extends AbstractParam {
                     + "    Fail closed: \"NO EXPLOIT PATH\" if truly clean\n"
                     + "    Burp/ZAP ready (copy-paste to Repeater/Intruder)\n";
 
-        private static final String PROMPT_SKEPTIC =
-                "You are a grizzled pentester who lives to kill false positives. Scanner alerts are guilty until proven innocent.\n"
+    private static final String PROMPT_SKEPTIC =
+            "You are a grizzled pentester who lives to kill false positives. Scanner alerts are guilty until proven innocent.\n"
                     + "\n"
                     + "Given this traffic + [scanner claim: SQLi/XSS/CSRF/etc.], DISMANTLE it:\n"
                     + "\n"
@@ -136,8 +136,8 @@ public class AnalystOptions extends AbstractParam {
                     + "\n"
                     + "Output only when >80% confident it's noise. Otherwise: \"Manual verification required.\"\n";
 
-        private static final String PROMPT_API =
-                "You are an API assassin who finds million-dollar logic breaks scanners miss. Ignore OWASP Top 10 noise. Hunt BUSINESS LOGIC + AUTHZ exclusively.\n"
+    private static final String PROMPT_API =
+            "You are an API assassin who finds million-dollar logic breaks scanners miss. Ignore OWASP Top 10 noise. Hunt BUSINESS LOGIC + AUTHZ exclusively.\n"
                     + "\n"
                     + "EXAMPLE:\n"
                     + "Dissect this API traffic for:\n"
@@ -167,7 +167,7 @@ public class AnalystOptions extends AbstractParam {
                     + "\n"
                     + "No logic issues? \"API logic secure.\"\n";
 
-        private static final String DEFAULT_PROMPT = PROMPT_STANDARD;
+    private static final String DEFAULT_PROMPT = PROMPT_STANDARD;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private Map<String, String> roles = new LinkedHashMap<>();
@@ -239,8 +239,8 @@ public class AnalystOptions extends AbstractParam {
     }
 
     /**
-     * Legacy accessor kept for compatibility. Prefer {@link #getRolePrompt(String)} with
-     * {@link #getActiveRole()}.
+     * Legacy accessor kept for compatibility. Prefer {@link #getRolePrompt(String)} with {@link
+     * #getActiveRole()}.
      */
     @Deprecated
     public String getSystemPrompt() {
