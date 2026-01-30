@@ -278,6 +278,7 @@ public class AnalystOptions extends AbstractParam {
     }
 
     public String getActiveRole() {
+        ensureDefaults();
         return activeRole;
     }
 
@@ -295,6 +296,7 @@ public class AnalystOptions extends AbstractParam {
     }
 
     public Map<String, String> getRoles() {
+        ensureDefaults();
         return new LinkedHashMap<>(roles);
     }
 

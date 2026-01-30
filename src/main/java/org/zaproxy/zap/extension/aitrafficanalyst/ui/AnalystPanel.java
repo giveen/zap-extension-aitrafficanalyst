@@ -31,6 +31,7 @@ import javax.swing.JToolBar;
 import javax.swing.JEditorPane;
 import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.StyleSheet;
+import java.util.Map;
 import org.parosproxy.paros.control.Control;
 import org.parosproxy.paros.core.scanner.Alert;
 import org.parosproxy.paros.extension.AbstractPanel;
@@ -147,6 +148,34 @@ public class AnalystPanel extends AbstractPanel {
         // Toolbar with actions
         JToolBar toolBar = new JToolBar();
         toolBar.setFloatable(false);
+
+        toolBar.addSeparator();
+        toolBar.add(new JLabel("Role: "));
+        JComboBox<String> roleSelector = new JComboBox<>();
+        roleSelector.setMaximumSize(new Dimension(220, 28));
+        roleSelector.setEnabled(this.extension != null && this.extension.getOptions() != null);
+        if (this.extension != null && this.extension.getOptions() != null) {
+            Map<String, String> roles = this.extension.getOptions().getRoles();
+            for (String roleName : roles.keySet()) {
+                roleSelector.addItem(roleName);
+            }
+            roleSelector.setSelectedItem(this.extension.getOptions().getActiveRole());
+        }
+
+        roleSelector.addActionListener(
+                e -> {
+                    if (this.extension == null || this.extension.getOptions() == null) {
+                        return;
+                    }
+                    String selected = (String) roleSelector.getSelectedItem();
+                    if (selected != null) {
+                        this.extension.getOptions().setActiveRole(selected);
+                    }
+                });
+
+        toolBar.add(roleSelector);
+        toolBar.addSeparator();
+
         JButton btnClear = new JButton(org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.btn.clear"));
         btnClear.addActionListener(e -> clearAnalysis());
         toolBar.add(btnClear);
@@ -188,6 +217,9 @@ public class AnalystPanel extends AbstractPanel {
         styleSheet.addRule("body { font-family: sans-serif; padding: 15px; line-height: 1.5; }");
         styleSheet.addRule("h3 { color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 20px; }");
         styleSheet.addRule("code { background-color: #f8f9fa; padding: 2px 4px; border-radius: 4px; color: #e83e8c; font-family: monospace; }");
+        styleSheet.addRule(
+            "pre { background-color: #f0f0f0; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; }");
+        styleSheet.addRule("pre code { background-color: transparent; padding: 0; color: inherit; }");
         styleSheet.addRule("blockquote { border-left: 5px solid #dfe2e5; color: #6a737d; padding-left: 1em; margin-left: 0; font-style: italic; }");
         styleSheet.addRule("hr { border: 0; border-top: 2px solid #eee; margin: 20px 0; }");
         resultArea.setEditorKit(kit);
