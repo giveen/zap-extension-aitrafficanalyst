@@ -25,12 +25,21 @@ import org.parosproxy.paros.extension.AbstractPanel;
 import org.commonmark.node.Node;
 import org.commonmark.parser.Parser;
 import org.commonmark.renderer.html.HtmlRenderer;
+import org.jsoup.Jsoup;
+import org.jsoup.safety.Safelist;
 
 public class AnalystPanel extends AbstractPanel {
 
     private static final long serialVersionUID = 1L;
     private JEditorPane resultArea;
     private StringBuilder fullHistoryMarkdown = new StringBuilder();
+        private static final Parser MARKDOWN_PARSER = Parser.builder().build();
+        private static final HtmlRenderer HTML_RENDERER = HtmlRenderer.builder()
+            .softbreak("<br/>")
+            .escapeHtml(true)
+            .build();
+    private static final int MAX_HISTORY_CHARS = 2 * 1024 * 1024; // 2 MB
+    private static final int KEEP_HISTORY_CHARS = MAX_HISTORY_CHARS / 2; // keep newest 1MB when trimming
 
     public AnalystPanel() {
         super();
@@ -38,55 +47,76 @@ public class AnalystPanel extends AbstractPanel {
 
     public void init() {
         this.setLayout(new BorderLayout());
-        this.setName("AI Analysis"); // This is the tab name
+        this.setName(org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.panel.name")); // This is the tab name
         // this.setIcon(new ImageIcon(getClass().getResource("/resource/icon.png"))); // TODO: Add icon later
 
         // Try to load bundled icon from resources and scale it down to a fixed 16x16 BufferedImage
         try {
             java.net.URL iconURL = getClass().getResource("/org/zaproxy/zap/extension/aitrafficanalyst/resources/ai-analysis.png");
             if (iconURL != null) {
-                BufferedImage originalImg = ImageIO.read(iconURL);
-
-                // Prepare final canvas with alpha channel
-                BufferedImage finalImg = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
-                Graphics2D g2 = finalImg.createGraphics();
-
-                // Detect Theme Brightness
-                Color bg = UIManager.getColor("Panel.background");
-                int brightness = (bg.getRed() + bg.getGreen() + bg.getBlue()) / 3;
-                boolean isDarkTheme = brightness < 128;
-
-                // Use high-quality interpolation
-                g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-                g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-                // If dark theme, draw a subtle light glow behind the icon for contrast
-                if (isDarkTheme) {
-                    g2.setColor(new Color(255, 255, 255, 40)); // Semi-transparent white
-                    g2.fillOval(1, 1, 14, 14);
+                BufferedImage originalImg = null;
+                try {
+                    originalImg = ImageIO.read(iconURL);
+                } catch (Exception readEx) {
+                    LogManager.getLogger(AnalystPanel.class).warn("ImageIO.read failed, will fallback to ImageIcon", readEx);
                 }
 
-                // Draw icon centered with 1px padding (14x14)
-                g2.drawImage(originalImg, 1, 1, 14, 14, null);
-                g2.dispose();
+                if (originalImg == null) {
+                    // Fallback to ImageIcon which may handle different image types
+                    try {
+                        ImageIcon fallback = new ImageIcon(iconURL);
+                        Image scaled = fallback.getImage().getScaledInstance(16, 16, Image.SCALE_SMOOTH);
+                        BufferedImage finalImg = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+                        Graphics2D g2Fallback = finalImg.createGraphics();
+                        g2Fallback.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                        g2Fallback.drawImage(scaled, 0, 0, null);
+                        g2Fallback.dispose();
+                        this.setIcon(new ImageIcon(finalImg));
+                    } catch (Exception fbEx) {
+                        LogManager.getLogger(AnalystPanel.class).error("Failed to create fallback icon", fbEx);
+                    }
+                } else {
+                    // Prepare final canvas with alpha channel
+                    BufferedImage finalImg = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+                    Graphics2D g2 = finalImg.createGraphics();
 
-                this.setIcon(new ImageIcon(finalImg));
+                    // Detect Theme Brightness
+                    Color bg = UIManager.getColor("Panel.background");
+                    int brightness = (bg.getRed() + bg.getGreen() + bg.getBlue()) / 3;
+                    boolean isDarkTheme = brightness < 128;
+
+                    // Use high-quality interpolation
+                    g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+                    g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                    // If dark theme, draw a subtle light glow behind the icon for contrast
+                    if (isDarkTheme) {
+                        g2.setColor(new Color(255, 255, 255, 40)); // Semi-transparent white
+                        g2.fillOval(1, 1, 14, 14);
+                    }
+
+                    // Draw icon centered with 1px padding (14x14)
+                    g2.drawImage(originalImg, 1, 1, 14, 14, null);
+                    g2.dispose();
+
+                    this.setIcon(new ImageIcon(finalImg));
+                }
             } else {
                 LogManager.getLogger(AnalystPanel.class)
                     .error("AI Analysis Icon NOT FOUND at: /org/zaproxy/zap/extension/aitrafficanalyst/resources/ai-analysis.png");
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (RuntimeException e) {
+            LogManager.getLogger(AnalystPanel.class).error("Unexpected error while loading icon", e);
         }
 
         // Toolbar with actions
         JToolBar toolBar = new JToolBar();
         toolBar.setFloatable(false);
-        JButton btnClear = new JButton("Clear All");
+        JButton btnClear = new JButton(org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.btn.clear"));
         btnClear.addActionListener(e -> clearAnalysis());
         toolBar.add(btnClear);
-        JButton btnSave = new JButton("Save Report");
+        JButton btnSave = new JButton(org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.btn.save"));
         btnSave.addActionListener(e -> saveReport());
         toolBar.add(btnSave);
         this.add(toolBar, BorderLayout.NORTH);
@@ -124,38 +154,53 @@ public class AnalystPanel extends AbstractPanel {
             try (FileWriter writer = new FileWriter(file)) {
                 writer.write(fullHistoryMarkdown.toString());
                 JOptionPane.showMessageDialog(this, "Report saved to " + file.getAbsolutePath(), "Saved", JOptionPane.INFORMATION_MESSAGE);
-            } catch (Exception ex) {
+            } catch (java.io.IOException ex) {
+                JOptionPane.showMessageDialog(this, "Error saving report: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            } catch (RuntimeException ex) {
                 JOptionPane.showMessageDialog(this, "Error saving report: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
     public void updateAnalysis(String url, String markdownText) {
         // 1. If this is a "Thinking..." message, show temporary status without appending to history
-        if (markdownText != null && markdownText.contains("Thinking...")) {
+        String thinkingKey = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.status.thinking");
+        if (markdownText != null && markdownText.contains(thinkingKey)) {
             String temp = fullHistoryMarkdown.toString() + "\n\n*STATUS: " + markdownText + "*";
             renderHtml(temp);
             return;
         }
 
         // 2. Permanent append to markdown history
-        fullHistoryMarkdown.append("\n\n---\n### Analysis for: ").append(url).append("\n\n");
-        fullHistoryMarkdown.append(markdownText);
+        String text = markdownText != null ? markdownText : "";
+        // Avoid duplicating headers if the model already included an analysis header
+        String trimmed = text.trim();
+        boolean hasHeader = trimmed.startsWith("### Analysis for:") || trimmed.startsWith("Analysis for:") || trimmed.contains("Analysis for: " + url);
+        if (!hasHeader) {
+            fullHistoryMarkdown.append("\n\n---\n### Analysis for: ").append(url).append("\n\n");
+        }
+        fullHistoryMarkdown.append(text);
+
+        // 2.a Prune history if it grows beyond MAX_HISTORY_CHARS
+        if (fullHistoryMarkdown.length() > MAX_HISTORY_CHARS) {
+            // Keep only the newest KEEP_HISTORY_CHARS characters and insert a truncation marker
+            String tail = fullHistoryMarkdown.substring(fullHistoryMarkdown.length() - KEEP_HISTORY_CHARS);
+            fullHistoryMarkdown.setLength(0);
+            fullHistoryMarkdown.append("\n\n[... previous history truncated due to size ...]\n");
+            fullHistoryMarkdown.append(tail);
+        }
 
         // 3. Render the combined markdown
         renderHtml(fullHistoryMarkdown.toString());
     }
 
     private void renderHtml(String markdown) {
-        Parser parser = Parser.builder().build();
-        Node document = parser.parse(markdown);
-        HtmlRenderer renderer = HtmlRenderer.builder()
-            .softbreak("<br/>")
-            .build();
-        
-        String htmlContent = renderer.render(document);
-        
-        // Add some basic CSS for a clean "Report" look
-        String finalHtml = "<html><body>" + htmlContent + "</body></html>";
+        Node document = MARKDOWN_PARSER.parse(markdown);
+        String htmlContent = HTML_RENDERER.render(document);
+
+        // Sanitize HTML using a permissive but safe whitelist (no scripts/styles)
+        String cleanHtml = Jsoup.clean(htmlContent, Safelist.basic());
+
+        String finalHtml = "<html><body>" + cleanHtml + "</body></html>";
 
         javax.swing.SwingUtilities.invokeLater(() -> {
             resultArea.setText(finalHtml);

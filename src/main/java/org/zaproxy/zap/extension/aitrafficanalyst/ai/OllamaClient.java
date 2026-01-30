@@ -51,6 +51,30 @@ public class OllamaClient {
         this.mapper = new ObjectMapper();
     }
 
+    /**
+     * Construct an OllamaClient using a shared OkHttpClient instance.
+     */
+    public OllamaClient(OkHttpClient sharedClient, String baseUrl) {
+        this.baseUrl = baseUrl;
+        String b = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
+
+        if (b.contains("/api/generate")) {
+            int idx = b.indexOf("/api/generate");
+            this.generateEndpoint = b.substring(0, idx) + "/api/generate";
+            this.tagsEndpoint = this.generateEndpoint.replace("/api/generate", "/api/tags");
+        } else if (b.contains("/api/tags")) {
+            int idx = b.indexOf("/api/tags");
+            this.tagsEndpoint = b.substring(0, idx) + "/api/tags";
+            this.generateEndpoint = this.tagsEndpoint.replace("/api/tags", "/api/generate");
+        } else {
+            this.generateEndpoint = b + "api/generate";
+            this.tagsEndpoint = b + "api/tags";
+        }
+
+        this.client = sharedClient;
+        this.mapper = new ObjectMapper();
+    }
+
     public List<String> getModels() throws IOException {
         Request request = new Request.Builder()
             .url(this.tagsEndpoint)

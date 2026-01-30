@@ -12,6 +12,8 @@ import javax.swing.JButton;
 import javax.swing.JOptionPane;
 import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
+import java.net.URI;
+import java.net.InetAddress;
 import org.parosproxy.paros.view.AbstractParamPanel;
 import org.parosproxy.paros.model.OptionsParam;
 import org.parosproxy.paros.model.Model;
@@ -40,11 +42,11 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
         this.setLayout(new GridBagLayout());
         this.setName("AI Traffic Analyst"); // Name in the tree on the left
 
-        JLabel lblUrl = new JLabel("Ollama Base URL:");
+        JLabel lblUrl = new JLabel(org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.options.ollamaUrl"));
         txtOllamaUrl = new ZapTextField();
-        txtOllamaUrl.setToolTipText("e.g. http://localhost:11434/");
+        txtOllamaUrl.setToolTipText(org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.options.ollamaUrl.tooltip"));
         
-        JLabel lblModel = new JLabel("Model Name:");
+        JLabel lblModel = new JLabel(org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.options.modelName"));
         cboModelName = new JComboBox<>();
 
         GridBagConstraints gbc = new GridBagConstraints();
@@ -71,7 +73,7 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
         cboModelName = new JComboBox<>();
         cboModelName.setEditable(true); // Allow typing if API fails
         
-        JButton btnRefresh = new JButton("Refresh Models");
+        JButton btnRefresh = new JButton(org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.options.refresh"));
         btnRefresh.addActionListener(e -> fetchModels());
 
         GridBagConstraints subGbc = new GridBagConstraints();
@@ -89,7 +91,7 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
         this.add(modelPanel, gbc);
 
         // Row 3: System Prompt Label + TextArea
-        JLabel lblPrompt = new JLabel("System Prompt:");
+        JLabel lblPrompt = new JLabel(org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.options.systemPrompt"));
         txtSystemPrompt = new JTextArea(5, 60);
         JScrollPane promptScroll = new JScrollPane(txtSystemPrompt);
 
@@ -106,7 +108,7 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
         this.add(promptScroll, gbc);
 
         // Row 3: Reset to Defaults button
-        JButton btnReset = new JButton("Reset to Defaults");
+        JButton btnReset = new JButton(org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.options.reset"));
         btnReset.addActionListener(e -> {
             int confirm = JOptionPane.showConfirmDialog(this,
                     "Are you sure you want to reset all settings to their original defaults?",
@@ -139,10 +141,19 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
     }
 
     private void fetchModels() {
-        new Thread(() -> {
+        if (extension != null && extension.getExecutor() != null) {
+            extension.getExecutor().submit(() -> {
             try {
                 String url = txtOllamaUrl.getText();
-                OllamaClient client = new OllamaClient(url);
+                if (!isAllowedOllamaUrl(url)) {
+                    javax.swing.SwingUtilities.invokeLater(() -> {
+                        JOptionPane.showMessageDialog(this, "Ollama URL must be localhost (127.0.0.1 or ::1) or a loopback address.", "Invalid URL", JOptionPane.ERROR_MESSAGE);
+                    });
+                    return;
+                }
+                OllamaClient client = new OllamaClient(
+                        extension != null ? extension.getHttpClient() : null,
+                        url);
                 java.util.List<String> models = client.getModels();
                 
                 javax.swing.SwingUtilities.invokeLater(() -> {
@@ -156,14 +167,73 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
                     } else if (!models.isEmpty()) {
                         cboModelName.setSelectedIndex(0);
                     }
-                    JOptionPane.showMessageDialog(this, "Models loaded successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+                    JOptionPane.showMessageDialog(this, org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.options.modelsLoaded"), "Success", JOptionPane.INFORMATION_MESSAGE);
+                });
+            } catch (java.net.UnknownHostException e) {
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(this, "Network error: cannot resolve host - " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                });
+            } catch (java.net.SocketTimeoutException e) {
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(this, "Timeout fetching models from Ollama: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                });
+            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(this, "Invalid response while loading models: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                });
+            } catch (java.io.IOException e) {
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(this, "I/O error fetching models: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
                 });
             } catch (Exception e) {
                 javax.swing.SwingUtilities.invokeLater(() -> {
                     JOptionPane.showMessageDialog(this, "Error fetching models: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
                 });
             }
-        }).start();
+            });
+        } else {
+            new Thread(() -> {
+                try {
+                    String url = txtOllamaUrl.getText();
+                    OllamaClient client = new OllamaClient(url);
+                    java.util.List<String> models = client.getModels();
+                    
+                    javax.swing.SwingUtilities.invokeLater(() -> {
+                        String current = (String) cboModelName.getSelectedItem();
+                        cboModelName.removeAllItems();
+                        for (String m : models) {
+                            cboModelName.addItem(m);
+                        }
+                        if (current != null && !current.isEmpty()) {
+                            cboModelName.setSelectedItem(current);
+                        } else if (!models.isEmpty()) {
+                            cboModelName.setSelectedIndex(0);
+                        }
+                        JOptionPane.showMessageDialog(this, org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.options.modelsLoaded"), "Success", JOptionPane.INFORMATION_MESSAGE);
+                    });
+                } catch (java.net.UnknownHostException e) {
+                    javax.swing.SwingUtilities.invokeLater(() -> {
+                        JOptionPane.showMessageDialog(this, "Network error: cannot resolve host - " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    });
+                } catch (java.net.SocketTimeoutException e) {
+                    javax.swing.SwingUtilities.invokeLater(() -> {
+                        JOptionPane.showMessageDialog(this, "Timeout fetching models from Ollama: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    });
+                } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                    javax.swing.SwingUtilities.invokeLater(() -> {
+                        JOptionPane.showMessageDialog(this, "Invalid response while loading models: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    });
+                } catch (java.io.IOException e) {
+                    javax.swing.SwingUtilities.invokeLater(() -> {
+                        JOptionPane.showMessageDialog(this, "I/O error fetching models: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    });
+                } catch (Exception e) {
+                    javax.swing.SwingUtilities.invokeLater(() -> {
+                        JOptionPane.showMessageDialog(this, "Error fetching models: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    });
+                }
+            }).start();
+        }
     }
 
     @Override
@@ -180,10 +250,43 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
     public void saveParam(Object obj) throws Exception {
         OptionsParam optionsParam = (OptionsParam) obj;
         AnalystOptions options = optionsParam.getParamSet(AnalystOptions.class);
+        String url = txtOllamaUrl.getText();
+        if (!isAllowedOllamaUrl(url)) {
+            throw new IllegalArgumentException("Ollama URL is invalid. Only localhost/loopback addresses are allowed for security reasons.");
+        }
         
-        options.setOllamaUrl(txtOllamaUrl.getText());
+        options.setOllamaUrl(url);
         options.setModelName((String) cboModelName.getSelectedItem());
         options.setSystemPrompt(txtSystemPrompt.getText());
+    }
+
+    private boolean isAllowedOllamaUrl(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            return false;
+        }
+        try {
+            URI uri = new URI(url.trim());
+            String scheme = uri.getScheme();
+            if (scheme == null || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
+                return false;
+            }
+            String host = uri.getHost();
+            if (host == null) {
+                return false;
+            }
+            // Allow loopback addresses (127.0.0.0/8) and ::1
+            InetAddress addr = InetAddress.getByName(host);
+            if (addr.isAnyLocalAddress() || addr.isLoopbackAddress()) {
+                return true;
+            }
+            // Also allow explicit 'localhost' textual host
+            if ("localhost".equalsIgnoreCase(host)) {
+                return true;
+            }
+        } catch (Exception e) {
+            return false;
+        }
+        return false;
     }
 
     @Override
