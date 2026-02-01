@@ -2,7 +2,6 @@ package org.zaproxy.zap.extension.aitrafficanalyst;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -11,12 +10,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import javax.swing.ImageIcon;
-import okhttp3.OkHttpClient;
 import org.parosproxy.paros.Constant;
 import org.parosproxy.paros.extension.ExtensionAdaptor;
 import org.parosproxy.paros.extension.ExtensionHook;
 import org.parosproxy.paros.network.HttpMessage;
 import org.parosproxy.paros.network.HttpSender;
+import org.zaproxy.zap.extension.aitrafficanalyst.ai.AnalystLlmClient;
+import org.zaproxy.zap.extension.aitrafficanalyst.ai.LlmAddonClient;
 import org.zaproxy.zap.extension.aitrafficanalyst.ui.AnalystOptionsPanel;
 import org.zaproxy.zap.extension.aitrafficanalyst.ui.AnalystPanel;
 import org.zaproxy.zap.extension.aitrafficanalyst.ui.AnalystPopupMenu;
@@ -29,7 +29,7 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
     private AnalystPanel analystPanel;
     private AnalystOptions options;
     private ExecutorService executor;
-    private OkHttpClient httpClient;
+    private AnalystLlmClient llmClient;
 
     // NEW: Session Memory Buffer (Max 5 items)
     private final List<String> sessionContext = Collections.synchronizedList(new LinkedList<>());
@@ -55,12 +55,8 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
                 return t;
             }
         });
-        // Shared OkHttpClient for reuse across Ollama calls
-        this.httpClient = new OkHttpClient.Builder()
-            .connectTimeout(Duration.ofSeconds(60))
-            .readTimeout(Duration.ofSeconds(120))
-            .writeTimeout(Duration.ofSeconds(60))
-            .build();
+        // Phase 1: Use the official ZAP LLM add-on via an adapter.
+        this.llmClient = new LlmAddonClient();
     }
 
     @Override
@@ -122,8 +118,20 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
         return this.executor;
     }
 
-    public OkHttpClient getHttpClient() {
-        return this.httpClient;
+    public AnalystLlmClient getLlmClient() {
+        return this.llmClient;
+    }
+
+    public String getLlmNotConfiguredMessage() {
+        AnalystLlmClient client = getLlmClient();
+        if (client == null) {
+            return "❌ LLM integration is not available.";
+        }
+        String issue = client.getCommsIssue();
+        if (issue != null && !issue.trim().isEmpty()) {
+            return "❌ LLM not configured: " + issue;
+        }
+        return "❌ LLM add-on is installed but not configured. Configure it via Tools → Options → LLM.";
     }
 
     /**
@@ -178,7 +186,7 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
         if (this.analystPanel != null) {
             this.analystPanel.setLastMessage(msg);
             this.analystPanel.setTabFocus();
-            String modelName = this.options != null ? this.options.getModelName() : "llama3:70b";
+            String modelName = "LLM";
             String tmpl =
                     org.parosproxy.paros.Constant.messages.getString(
                             "aitrafficanalyst.status.thinking_with_model");
@@ -193,12 +201,18 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
         this.executor.submit(
                 () -> {
                     try {
-                        String modelName =
-                                this.options != null ? this.options.getModelName() : "llama3:70b";
-                        String ollamaUrl =
-                                this.options != null
-                                        ? this.options.getOllamaUrl()
-                                        : "http://localhost:11434/api/generate";
+                        String modelName = "LLM";
+                        AnalystLlmClient client = getLlmClient();
+                        if (client == null || !client.isConfigured()) {
+                            String msgText = getLlmNotConfiguredMessage();
+                            javax.swing.SwingUtilities.invokeLater(
+                                    () -> {
+                                        if (this.analystPanel != null) {
+                                            this.analystPanel.updateAnalysis(url, msgText);
+                                        }
+                                    });
+                            return;
+                        }
 
                         if (this.analystPanel != null) {
                             String sending =
@@ -296,10 +310,13 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
                                     });
                         }
 
-                        org.zaproxy.zap.extension.aitrafficanalyst.ai.OllamaClient ai =
-                                new org.zaproxy.zap.extension.aitrafficanalyst.ai.OllamaClient(
-                                        this.httpClient, ollamaUrl);
-                        String result = ai.query(modelName, combinedPrompt);
+                                // Tell the LLM add-on to return Markdown-friendly output.
+                                String finalPrompt =
+                                    combinedPrompt
+                                        + "\n\n--- OUTPUT FORMAT ---\n"
+                                        + "Respond in Markdown. If your provider forces JSON output, return a single JSON object with a 'markdown' field containing the Markdown.\n";
+
+                                String result = client.chat(finalPrompt);
 
                         try {
                             String analysisResult = result != null ? result : "";
@@ -340,14 +357,6 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
                 this.executor.awaitTermination(2, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-            }
-        }
-        if (this.httpClient != null) {
-            try {
-                this.httpClient.connectionPool().evictAll();
-                this.httpClient.dispatcher().executorService().shutdownNow();
-            } catch (Exception e) {
-                LOGGER.debug("Error shutting down shared OkHttpClient", e);
             }
         }
         super.unload();

@@ -110,21 +110,28 @@ public class AnalystPopupMenu extends PopupMenuItemHttpMessageContainer {
                 // Show Thinking state in the panel
                     if (extension.getAnalystPanel() != null) {
                         extension.getAnalystPanel().setTabFocus();
-                        String modelName = this.extension.getOptions() != null ? this.extension.getOptions().getModelName() : "llama3:70b";
+                        String modelName = "LLM";
                         String tmpl = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.status.thinking_with_model");
                         String statusMsg = java.text.MessageFormat.format(tmpl, modelName);
                         extension.getAnalystPanel().updateAnalysis(url, statusMsg);
                     }
 
-                LOGGER.info("Sending analysis request to Ollama for: " + url);
+                LOGGER.info("Sending analysis request to LLM add-on for: " + url);
 
                 // 2. Run in background ExecutorService (do not freeze ZAP UI)
                 if (extension != null && extension.getExecutor() != null) {
                     extension.getExecutor().submit(() -> {
                     try {
-                        // Get config from Options
-                        String modelName = this.extension.getOptions() != null ? this.extension.getOptions().getModelName() : "llama3:70b";
-                        String ollamaUrl = this.extension.getOptions() != null ? this.extension.getOptions().getOllamaUrl() : "http://localhost:11434/api/generate";
+                        String modelName = "LLM";
+                        if (extension.getLlmClient() == null || !extension.getLlmClient().isConfigured()) {
+                            String msgText = extension.getLlmNotConfiguredMessage();
+                            javax.swing.SwingUtilities.invokeLater(() -> {
+                                if (extension.getAnalystPanel() != null) {
+                                    extension.getAnalystPanel().updateAnalysis(url, msgText);
+                                }
+                            });
+                            return;
+                        }
 
                         // Notify panel we're sending a live request
                         if (extension.getAnalystPanel() != null) {
@@ -219,11 +226,12 @@ public class AnalystPopupMenu extends PopupMenuItemHttpMessageContainer {
                                     });
                                 }
 
-                                org.zaproxy.zap.extension.aitrafficanalyst.ai.OllamaClient ai =
-                                    new org.zaproxy.zap.extension.aitrafficanalyst.ai.OllamaClient(
-                                        extension != null ? extension.getHttpClient() : null,
-                                        ollamaUrl);
-                                String result = ai.query(modelName, combinedPrompt);
+                                String finalPrompt =
+                                    combinedPrompt
+                                        + "\n\n--- OUTPUT FORMAT ---\n"
+                                        + "Respond in Markdown. If your provider forces JSON output, return a single JSON object with a 'markdown' field containing the Markdown.\n";
+
+                                String result = extension.getLlmClient().chat(finalPrompt);
 
                                 // Store a compact summary of this analysis in the session memory.
                                 try {
@@ -245,36 +253,8 @@ public class AnalystPopupMenu extends PopupMenuItemHttpMessageContainer {
                                 extension.getAnalystPanel().updateAnalysis(url, result);
                             }
                         });
-                    } catch (java.net.UnknownHostException e) {
-                        LOGGER.error("Ollama host not found", e);
-                        javax.swing.SwingUtilities.invokeLater(() -> {
-                            if (extension.getAnalystPanel() != null) {
-                                extension.getAnalystPanel().updateAnalysis(url, "❌ Network error: cannot resolve host - " + e.getMessage());
-                            }
-                        });
-                    } catch (java.net.SocketTimeoutException e) {
-                        LOGGER.error("Ollama request timed out", e);
-                        javax.swing.SwingUtilities.invokeLater(() -> {
-                            if (extension.getAnalystPanel() != null) {
-                                extension.getAnalystPanel().updateAnalysis(url, "❌ Network timeout contacting Ollama: " + e.getMessage());
-                            }
-                        });
-                    } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-                        LOGGER.error("Failed to parse Ollama response", e);
-                        javax.swing.SwingUtilities.invokeLater(() -> {
-                            if (extension.getAnalystPanel() != null) {
-                                extension.getAnalystPanel().updateAnalysis(url, "❌ Response parse error from model: " + e.getMessage());
-                            }
-                        });
-                    } catch (java.io.IOException e) {
-                        LOGGER.error("I/O error during analysis", e);
-                        javax.swing.SwingUtilities.invokeLater(() -> {
-                            if (extension.getAnalystPanel() != null) {
-                                extension.getAnalystPanel().updateAnalysis(url, "❌ I/O error: " + e.getMessage());
-                            }
-                        });
                     } catch (Exception e) {
-                        LOGGER.error("Ollama Analysis Failed", e);
+                        LOGGER.error("LLM Analysis Failed", e);
                         javax.swing.SwingUtilities.invokeLater(() -> {
                             if (extension.getAnalystPanel() != null) {
                                 extension.getAnalystPanel().updateAnalysis(url, "❌ Error: " + e.getMessage());
@@ -286,9 +266,16 @@ public class AnalystPopupMenu extends PopupMenuItemHttpMessageContainer {
                     new Thread(() -> {
                         try {
                             // fallback to old behavior if executor is not available
-                            // Get config from Options
-                            String modelName = this.extension.getOptions() != null ? this.extension.getOptions().getModelName() : "llama3:70b";
-                            String ollamaUrl = this.extension.getOptions() != null ? this.extension.getOptions().getOllamaUrl() : "http://localhost:11434/api/generate";
+                            String modelName = "LLM";
+                            if (extension.getLlmClient() == null || !extension.getLlmClient().isConfigured()) {
+                                String msgText = extension.getLlmNotConfiguredMessage();
+                                javax.swing.SwingUtilities.invokeLater(() -> {
+                                    if (extension.getAnalystPanel() != null) {
+                                        extension.getAnalystPanel().updateAnalysis(url, msgText);
+                                    }
+                                });
+                                return;
+                            }
 
                             // Notify panel we're sending a live request
                             if (extension.getAnalystPanel() != null) {
@@ -380,11 +367,12 @@ public class AnalystPopupMenu extends PopupMenuItemHttpMessageContainer {
                                 });
                             }
 
-                                org.zaproxy.zap.extension.aitrafficanalyst.ai.OllamaClient ai =
-                                    new org.zaproxy.zap.extension.aitrafficanalyst.ai.OllamaClient(
-                                        extension != null ? extension.getHttpClient() : null,
-                                        ollamaUrl);
-                            String result = ai.query(modelName, combinedPrompt);
+                            String finalPrompt =
+                                    combinedPrompt
+                                            + "\n\n--- OUTPUT FORMAT ---\n"
+                                            + "Respond in Markdown. If your provider forces JSON output, return a single JSON object with a 'markdown' field containing the Markdown.\n";
+
+                            String result = extension.getLlmClient().chat(finalPrompt);
 
                             // Store a compact summary of this analysis in the session memory.
                             try {
@@ -406,7 +394,7 @@ public class AnalystPopupMenu extends PopupMenuItemHttpMessageContainer {
                                 }
                             });
                         } catch (Exception e) {
-                            LOGGER.error("Ollama Analysis Failed", e);
+                            LOGGER.error("LLM Analysis Failed", e);
                             javax.swing.SwingUtilities.invokeLater(() -> {
                                 if (extension.getAnalystPanel() != null) {
                                     extension.getAnalystPanel().updateAnalysis(url, "❌ Error: " + e.getMessage());

@@ -52,3 +52,6 @@ todo.md
 
 # Lock files
 gradle.lockfile
+
+# Local agent logs / metadata
+.jarvis/

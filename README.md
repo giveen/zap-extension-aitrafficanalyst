@@ -1,6 +1,6 @@
 ## AI Traffic Analyst for OWASP ZAP
 
-A high-performance, local-LLM-powered security analysis add-on for OWASP ZAP. This tool augments ZAP by feeding live request/response pairs into local models (for example `llama3`, `pentest-ai`, or `qwen2.5`) to produce focused, OWASP-aware analysis.
+A security analysis add-on for OWASP ZAP that augments ZAP by feeding live request/response pairs into the official **ZAP LLM add-on** to produce focused, OWASP-aware analysis.
 
 ---
 
@@ -8,10 +8,10 @@ A high-performance, local-LLM-powered security analysis add-on for OWASP ZAP. Th
 
 - **Live Analysis:** Clones and resends the selected request to capture a fresh response before analysis.
 - **OWASP-first:** Prompts and reporting are rooted in the OWASP Top 10 (2021–2026) framework for focused vulnerability discovery.
-- **Privacy-centric:** Runs locally via Ollama so traffic and findings stay on your machine/network.
+- **Provider-agnostic:** Works with any provider configured in the ZAP LLM add-on (local or remote).
 - **Hardware-accelerated:** Designed to leverage local accelerators for high throughput (tested on high-end GPUs).
 - **Rich UI:** Persistent, Markdown-rendered analysis tab with configurable appearance and high-contrast iconography.
-- **Configurable:** Hot-swap models, system prompts, and API endpoints from the Options panel—no recompilation required.
+- **Configurable roles:** Customize analyst roles/prompts from the Options panel—no recompilation required.
 
 ---
 
@@ -19,9 +19,28 @@ A high-performance, local-LLM-powered security analysis add-on for OWASP ZAP. Th
 
 ### Prerequisites
 
-- OWASP ZAP (latest recommended).
-- Ollama running locally (default: `http://localhost:11434`).
-- Desired models available locally (e.g. `ollama pull llama3:70b`).
+- OWASP ZAP **2.15.0+**.
+- The **LLM** add-on installed/enabled.
+- An LLM provider configured via **Tools → Options → LLM**.
+
+Note: the upstream LLM add-on is still under active development. If it is not available in your ZAP Marketplace yet, you can build it from source (see below).
+
+### Installing the ZAP LLM add-on (if not in Marketplace yet)
+
+1. Clone the ZAP add-ons repo:
+
+```bash
+git clone https://github.com/zaproxy/zap-extensions.git
+cd zap-extensions
+```
+
+2. Build the LLM add-on:
+
+```bash
+./gradlew :addOns:llm:jarZapAddOn
+```
+
+3. Install the generated `.zap` in ZAP via **Manage Add-ons → Install Add-on from File…**, then restart ZAP.
 
 ### Build from Source
 
@@ -47,10 +66,10 @@ Install the add-on in ZAP via **Manage Add-ons → Install Add-on from File…**
 
 ## How to Use
 
-1. Configure: Tools → Options → AI Traffic Analyst. Set the Ollama URL, choose a model and adjust the system prompt.
-2. Refresh Models: Click `Refresh Models` in the Options panel to query available models from your Ollama instance.
-3. Analyze: Right-click any request in ZAP History and choose **AI Analyst**. The add-on will clone and resend the request to collect a live response, then send the combined request+response to the local model.
-4. Review: Results stream into the **AI Analysis** tab. 
+1. Configure the LLM provider: **Tools → Options → LLM**.
+2. (Optional) Configure prompts/roles: **Tools → Options → AI Traffic Analyst**.
+3. Analyze: Right-click any request in ZAP History and choose **AI Analyst**. The add-on clones and resends the request to collect a live response, then sends the combined request+response to the configured provider.
+4. Review: Results appear in the **AI Analysis** tab.
 
 ---
 
@@ -104,10 +123,25 @@ moving fast — and without pretending I suddenly became a full-time software en
 
 ---
 
+## Release Smoke Test Checklist
+
+Use this checklist to quickly validate a packaged `.zap` before publishing.
+
+- Start OWASP ZAP **2.15.0+**.
+- Install the **LLM** add-on (Marketplace if available; otherwise build/install it from `zap-extensions` as described above), then restart ZAP.
+- Configure a provider in **Tools → Options → LLM**.
+- Install this add-on: Manage Add-ons → Install Add-on from File… → select the built `.zap` in `build/zapAddOn/bin/`.
+- Generate some traffic (browse a site or use a sample request) so History has entries.
+- Right-click a History entry → **AI Analyst** → run **Analyze Request** (and optionally **Analyze GET/POST**).
+- Confirm output appears in the **AI Analysis** tab and renders as Markdown.
+
+Negative check:
+- Temporarily remove/disable the provider config in **Tools → Options → LLM**, then re-run analysis and confirm the add-on shows a clear “LLM not configured” guidance message.
+
 ## Notes & Troubleshooting
 
-- If the model list is empty, verify Ollama is reachable at the URL configured in Options.
-- For private/local-only usage, ensure your firewall and network settings allow local loopback traffic between ZAP and Ollama.
+- If analysis says the LLM is not configured, configure it via **Tools → Options → LLM**.
+- If you want private/local-only usage, configure a local provider in the LLM add-on (for example, a locally hosted model provider).
 - If the plugin doesn't load, check `ZapAddOn.xml` version constraints and the ZAP log for errors.
 
 ---

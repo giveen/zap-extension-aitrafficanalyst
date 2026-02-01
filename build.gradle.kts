@@ -10,17 +10,13 @@ plugins {
     id("org.zaproxy.common")
 }
 
-// Post-process generated ZapAddOn.xml to ensure required version tags are present
+// Post-process generated ZapAddOn.xml to ensure required version tags are present.
+// NOTE: The add-on Gradle plugin writes the generated manifest under build/zapAddOn/ZapAddOn.xml.
 tasks.named("generateZapAddOnManifest") {
     doLast {
-        val manifestFile = file("${project.buildDir}/resources/main/ZapAddOn.xml")
+        val manifestFile = layout.buildDirectory.file("zapAddOn/ZapAddOn.xml").get().asFile
         if (manifestFile.exists()) {
             var content = manifestFile.readText()
-
-            // Inject <not-before-version> to fix ZAP loading error
-            if (!content.contains("not-before-version")) {
-                content = content.replace("</author>", "</author>\n    <not-before-version>2.15.0</not-before-version>")
-            }
 
             // Inject <semver>
             if (!content.contains("semver")) {
@@ -35,8 +31,20 @@ tasks.named("generateZapAddOnManifest") {
                 }
             }
 
+            // Inject hard dependency on the official LLM add-on.
+            if (!content.contains("<dependencies>")) {
+                val depsBlock = "    <dependencies>\n        <addon>llm</addon>\n    </dependencies>\n"
+                content =
+                    when {
+                        content.contains("</url>") -> content.replaceFirst("</url>", "</url>\n$depsBlock")
+                        content.contains("</author>") ->
+                            content.replaceFirst("</author>", "</author>\n$depsBlock")
+                        else -> content
+                    }
+            }
+
             manifestFile.writeText(content)
-            println("Manually patched ZapAddOn.xml with version constraints.")
+            println("Manually patched ZapAddOn.xml (semver + dependencies).")
         }
     }
 }
@@ -57,16 +65,17 @@ description = "A template for a 3rd party ZAP Java add-on."
 zapAddOn {
     addOnId.set("aitrafficanalyst")
     addOnName.set("AI Traffic Analyst")
-    zapVersion.set("2.17.0")
+    // Minimum supported ZAP version.
+    zapVersion.set("2.15.0")
     addOnStatus.set(AddOnStatus.ALPHA)
 
-    releaseLink.set("https://github.com/jeremy/aitrafficanalyst/compare/v@PREVIOUS_VERSION@...v@CURRENT_VERSION@")
-    unreleasedLink.set("https://github.com/jeremy/aitrafficanalyst/compare/v@CURRENT_VERSION@...HEAD")
+    releaseLink.set("https://github.com/giveen/zap-extension-aitrafficanalyst/compare/v@PREVIOUS_VERSION@...v@CURRENT_VERSION@")
+    unreleasedLink.set("https://github.com/giveen/zap-extension-aitrafficanalyst/compare/v@CURRENT_VERSION@...HEAD")
 
     manifest {
         author.set("giveen") // Updated User
         url.set("https://github.com/giveen/aitrafficanalyst") // Updated URL
-        description.set("AI-driven traffic analysis using local LLMs.")
+        description.set("AI-driven traffic analysis using the ZAP LLM add-on.")
         extensions {
             register("org.zaproxy.zap.extension.aitrafficanalyst.ExtensionAiAnalyst")
         }
@@ -91,8 +100,6 @@ dependencies {
     compileOnly("org.zaproxy.addon:commonlib:1.36.0")
 
     // Add these for our AI logic:
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.15.2")
-    implementation("com.squareup.okhttp3:okhttp:4.11.0")
     implementation("org.commonmark:commonmark:0.21.0")
     implementation("org.jsoup:jsoup:1.16.2")
 

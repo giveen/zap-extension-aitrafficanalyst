@@ -19,26 +19,27 @@
  */
 package org.zaproxy.zap.extension.aitrafficanalyst;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.parosproxy.paros.common.AbstractParam;
 
 public class AnalystOptions extends AbstractParam {
 
-    private static final String PARAM_OLLAMA_URL = "aitrafficanalyst.ollama.url";
-    private static final String PARAM_MODEL_NAME = "aitrafficanalyst.ollama.model";
-    private static final String PARAM_SYSTEM_PROMPT = "aitrafficanalyst.ollama.prompt";
+    // Phase 2: legacy Ollama settings are no longer used.
+    @Deprecated private static final String PARAM_OLLAMA_URL = "aitrafficanalyst.ollama.url";
+    @Deprecated private static final String PARAM_MODEL_NAME = "aitrafficanalyst.ollama.model";
+    // Backward compatibility for earlier builds that stored a single prompt.
+    @Deprecated private static final String PARAM_SYSTEM_PROMPT = "aitrafficanalyst.ollama.prompt";
 
+    private static final String PARAM_ROLES_B64 = "aitrafficanalyst.roles.b64";
+
+    // Legacy storage format (JSON map) used by earlier builds.
     private static final String PARAM_ROLES_JSON = "aitrafficanalyst.roles.json";
     private static final String PARAM_ACTIVE_ROLE = "aitrafficanalyst.activeRole";
     // Backward compatibility for earlier 1.1.0 builds.
     private static final String PARAM_ACTIVE_ROLE_LEGACY = "aitrafficanalyst.roles.active";
-
-    // Defaults
-    private String ollamaUrl = "http://localhost:11434/";
-    private String modelName = "llama3:70b";
 
     // Default persona names
     private static final String ROLE_STANDARD = "Standard Analyst";
@@ -168,26 +169,24 @@ public class AnalystOptions extends AbstractParam {
                     + "No logic issues? \"API logic secure.\"\n";
 
     private static final String DEFAULT_PROMPT = PROMPT_STANDARD;
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
     private Map<String, String> roles = new LinkedHashMap<>();
     private String activeRole = DEFAULT_ROLE;
 
     @Override
     protected void parse() {
-        // Load from ZAP config file
-        ollamaUrl = getString(PARAM_OLLAMA_URL, ollamaUrl);
-        modelName = getString(PARAM_MODEL_NAME, modelName);
-
-        String rolesJson = getString(PARAM_ROLES_JSON, null);
+        // Load roles using the current storage format, with migration from the legacy JSON format.
         Map<String, String> parsedRoles = null;
-        if (rolesJson != null && !rolesJson.trim().isEmpty()) {
-            try {
-                parsedRoles =
-                        objectMapper.readValue(
-                                rolesJson, new TypeReference<LinkedHashMap<String, String>>() {});
-            } catch (Exception e) {
-                parsedRoles = null;
+        String rolesB64 = getString(PARAM_ROLES_B64, null);
+        if (rolesB64 != null && !rolesB64.trim().isEmpty()) {
+            parsedRoles = parseRolesB64(rolesB64);
+        }
+
+        boolean migratedFromLegacyJson = false;
+        if (parsedRoles == null || parsedRoles.isEmpty()) {
+            String rolesJson = getString(PARAM_ROLES_JSON, null);
+            if (rolesJson != null && !rolesJson.trim().isEmpty()) {
+                parsedRoles = parseRolesJson(rolesJson);
+                migratedFromLegacyJson = parsedRoles != null && !parsedRoles.isEmpty();
             }
         }
 
@@ -236,6 +235,19 @@ public class AnalystOptions extends AbstractParam {
         // Persist normalized selection so it survives restarts.
         getConfig().setProperty(PARAM_ACTIVE_ROLE, activeRole);
         getConfig().setProperty(PARAM_ACTIVE_ROLE_LEGACY, activeRole);
+
+        // Phase 2 cleanup: remove legacy Ollama settings if present.
+        try {
+            getConfig().clearProperty(PARAM_OLLAMA_URL);
+            getConfig().clearProperty(PARAM_MODEL_NAME);
+        } catch (Exception e) {
+            // Ignore configuration implementations that do not support clearProperty.
+        }
+
+        // If we loaded legacy JSON roles, migrate them to the current storage format.
+        if (migratedFromLegacyJson) {
+            persistRoles();
+        }
     }
 
     /**
@@ -257,24 +269,6 @@ public class AnalystOptions extends AbstractParam {
         setActiveRole(DEFAULT_ROLE);
         // Also write the legacy key for older builds.
         getConfig().setProperty(PARAM_SYSTEM_PROMPT, systemPrompt);
-    }
-
-    public String getOllamaUrl() {
-        return ollamaUrl;
-    }
-
-    public void setOllamaUrl(String ollamaUrl) {
-        this.ollamaUrl = ollamaUrl;
-        getConfig().setProperty(PARAM_OLLAMA_URL, ollamaUrl);
-    }
-
-    public String getModelName() {
-        return modelName;
-    }
-
-    public void setModelName(String modelName) {
-        this.modelName = modelName;
-        getConfig().setProperty(PARAM_MODEL_NAME, modelName);
     }
 
     public String getActiveRole() {
@@ -371,17 +365,213 @@ public class AnalystOptions extends AbstractParam {
     }
 
     private void persistRoles() {
+        String b64 = encodeRolesB64(roles);
+        getConfig().setProperty(PARAM_ROLES_B64, b64);
         try {
-            String json = objectMapper.writeValueAsString(roles);
-            getConfig().setProperty(PARAM_ROLES_JSON, json);
+            // Remove legacy JSON storage to avoid dead/confusing config.
+            getConfig().clearProperty(PARAM_ROLES_JSON);
         } catch (Exception e) {
-            // If serialization fails, fall back to keeping the roles in memory.
+            // Ignore.
         }
     }
 
+    private static String encodeRolesB64(Map<String, String> roles) {
+        if (roles == null || roles.isEmpty()) {
+            return "";
+        }
+        Base64.Encoder enc = Base64.getEncoder();
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, String> e : roles.entrySet()) {
+            String key = e.getKey() == null ? "" : e.getKey();
+            String value = e.getValue() == null ? "" : e.getValue();
+            if (sb.length() > 0) {
+                sb.append('\n');
+            }
+            sb.append(enc.encodeToString(key.getBytes(StandardCharsets.UTF_8)))
+                    .append('=')
+                    .append(enc.encodeToString(value.getBytes(StandardCharsets.UTF_8)));
+        }
+        return sb.toString();
+    }
+
+    private static Map<String, String> parseRolesB64(String rolesB64) {
+        if (rolesB64 == null) {
+            return null;
+        }
+        String text = rolesB64.trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        Base64.Decoder dec = Base64.getDecoder();
+        Map<String, String> out = new LinkedHashMap<>();
+        String[] lines = text.split("\\r?\\n");
+        for (String line : lines) {
+            if (line == null) {
+                continue;
+            }
+            String l = line.trim();
+            if (l.isEmpty()) {
+                continue;
+            }
+            int idx = l.indexOf('=');
+            if (idx <= 0) {
+                continue;
+            }
+            try {
+                String kB64 = l.substring(0, idx);
+                String vB64 = l.substring(idx + 1);
+                String k = new String(dec.decode(kB64), StandardCharsets.UTF_8);
+                String v = new String(dec.decode(vB64), StandardCharsets.UTF_8);
+                if (!k.trim().isEmpty()) {
+                    out.put(k, v);
+                }
+            } catch (IllegalArgumentException e) {
+                // Ignore malformed lines.
+            }
+        }
+        return out.isEmpty() ? null : out;
+    }
+
+    private static Map<String, String> parseRolesJson(String rolesJson) {
+        if (rolesJson == null) {
+            return null;
+        }
+        String s = rolesJson.trim();
+        if (s.isEmpty()) {
+            return null;
+        }
+        try {
+            int[] idx = new int[] {0};
+            skipWs(s, idx);
+            if (idx[0] >= s.length() || s.charAt(idx[0]) != '{') {
+                return null;
+            }
+            idx[0]++; // {
+            Map<String, String> out = new LinkedHashMap<>();
+            while (true) {
+                skipWs(s, idx);
+                if (idx[0] >= s.length()) {
+                    return null;
+                }
+                char c = s.charAt(idx[0]);
+                if (c == '}') {
+                    idx[0]++;
+                    break;
+                }
+                String key = parseJsonString(s, idx);
+                if (key == null) {
+                    return null;
+                }
+                skipWs(s, idx);
+                if (idx[0] >= s.length() || s.charAt(idx[0]) != ':') {
+                    return null;
+                }
+                idx[0]++;
+                skipWs(s, idx);
+                String value = parseJsonString(s, idx);
+                if (value == null) {
+                    return null;
+                }
+                if (!key.trim().isEmpty()) {
+                    out.put(key, value);
+                }
+                skipWs(s, idx);
+                if (idx[0] >= s.length()) {
+                    return null;
+                }
+                char sep = s.charAt(idx[0]);
+                if (sep == ',') {
+                    idx[0]++;
+                    continue;
+                }
+                if (sep == '}') {
+                    idx[0]++;
+                    break;
+                }
+                return null;
+            }
+            return out.isEmpty() ? null : out;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static void skipWs(String s, int[] idx) {
+        while (idx[0] < s.length()) {
+            char c = s.charAt(idx[0]);
+            if (c == ' ' || c == '\n' || c == '\r' || c == '\t') {
+                idx[0]++;
+            } else {
+                return;
+            }
+        }
+    }
+
+    private static String parseJsonString(String s, int[] idx) {
+        if (idx[0] >= s.length() || s.charAt(idx[0]) != '"') {
+            return null;
+        }
+        idx[0]++; // opening quote
+        StringBuilder sb = new StringBuilder();
+        while (idx[0] < s.length()) {
+            char c = s.charAt(idx[0]++);
+            if (c == '"') {
+                return sb.toString();
+            }
+            if (c != '\\') {
+                sb.append(c);
+                continue;
+            }
+            if (idx[0] >= s.length()) {
+                return null;
+            }
+            char esc = s.charAt(idx[0]++);
+            switch (esc) {
+                case '"':
+                    sb.append('"');
+                    break;
+                case '\\':
+                    sb.append('\\');
+                    break;
+                case '/':
+                    sb.append('/');
+                    break;
+                case 'b':
+                    sb.append('\b');
+                    break;
+                case 'f':
+                    sb.append('\f');
+                    break;
+                case 'n':
+                    sb.append('\n');
+                    break;
+                case 'r':
+                    sb.append('\r');
+                    break;
+                case 't':
+                    sb.append('\t');
+                    break;
+                case 'u':
+                    if (idx[0] + 4 > s.length()) {
+                        return null;
+                    }
+                    String hex = s.substring(idx[0], idx[0] + 4);
+                    idx[0] += 4;
+                    try {
+                        int code = Integer.parseInt(hex, 16);
+                        sb.append((char) code);
+                    } catch (NumberFormatException e) {
+                        return null;
+                    }
+                    break;
+                default:
+                    return null;
+            }
+        }
+        return null;
+    }
+
     public void resetToDefaults() {
-        this.setOllamaUrl("http://localhost:11434/");
-        this.setModelName("llama3:70b");
         Map<String, String> defaults = new LinkedHashMap<>();
         defaults.put(ROLE_STANDARD, PROMPT_STANDARD);
         defaults.put(ROLE_RED_TEAM, PROMPT_RED_TEAM);
