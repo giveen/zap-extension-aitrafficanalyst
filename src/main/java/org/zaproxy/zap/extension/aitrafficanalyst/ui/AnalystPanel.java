@@ -26,6 +26,7 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import java.io.File;
 import java.io.FileWriter;
+import java.text.MessageFormat;
 import javax.swing.JButton;
 import javax.swing.JToolBar;
 import javax.swing.JEditorPane;
@@ -242,11 +243,29 @@ public class AnalystPanel extends AbstractPanel {
             File file = chooser.getSelectedFile();
             try (FileWriter writer = new FileWriter(file)) {
                 writer.write(fullHistoryMarkdown.toString());
-                JOptionPane.showMessageDialog(this, "Report saved to " + file.getAbsolutePath(), "Saved", JOptionPane.INFORMATION_MESSAGE);
+                String msgT = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.report.saved");
+                String title = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.report.saved.title");
+                JOptionPane.showMessageDialog(
+                        this,
+                        MessageFormat.format(msgT, file.getAbsolutePath()),
+                        title,
+                        JOptionPane.INFORMATION_MESSAGE);
             } catch (java.io.IOException ex) {
-                JOptionPane.showMessageDialog(this, "Error saving report: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                String msgT = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.report.saveError");
+                String title = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.report.saveError.title");
+                JOptionPane.showMessageDialog(
+                        this,
+                        MessageFormat.format(msgT, ex.getMessage()),
+                        title,
+                        JOptionPane.ERROR_MESSAGE);
             } catch (RuntimeException ex) {
-                JOptionPane.showMessageDialog(this, "Error saving report: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                String msgT = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.report.saveError");
+                String title = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.report.saveError.title");
+                JOptionPane.showMessageDialog(
+                        this,
+                        MessageFormat.format(msgT, ex.getMessage()),
+                        title,
+                        JOptionPane.ERROR_MESSAGE);
             }
         }
     }

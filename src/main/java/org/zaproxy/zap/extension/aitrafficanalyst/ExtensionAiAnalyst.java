@@ -9,6 +9,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.text.MessageFormat;
 import javax.swing.ImageIcon;
 import org.parosproxy.paros.Constant;
 import org.parosproxy.paros.extension.ExtensionAdaptor;
@@ -125,13 +126,14 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
     public String getLlmNotConfiguredMessage() {
         AnalystLlmClient client = getLlmClient();
         if (client == null) {
-            return "❌ LLM integration is not available.";
+            return Constant.messages.getString("aitrafficanalyst.llm.unavailable");
         }
         String issue = client.getCommsIssue();
         if (issue != null && !issue.trim().isEmpty()) {
-            return "❌ LLM not configured: " + issue;
+            String tmpl = Constant.messages.getString("aitrafficanalyst.llm.notConfiguredWithIssue");
+            return MessageFormat.format(tmpl, issue);
         }
-        return "❌ LLM add-on is installed but not configured. Configure it via Tools → Options → LLM.";
+        return Constant.messages.getString("aitrafficanalyst.llm.notConfigured");
     }
 
     /**
@@ -341,8 +343,9 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
                         javax.swing.SwingUtilities.invokeLater(
                                 () -> {
                                     if (this.analystPanel != null) {
-                                        this.analystPanel.updateAnalysis(
-                                                url, "❌ Error: " + e.getMessage());
+                                        String errT = Constant.messages.getString("aitrafficanalyst.error");
+                                        String errMsg = MessageFormat.format(errT, e.getMessage());
+                                        this.analystPanel.updateAnalysis(url, errMsg);
                                     }
                                 });
                     }

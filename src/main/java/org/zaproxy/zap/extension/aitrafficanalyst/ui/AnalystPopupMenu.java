@@ -90,16 +90,12 @@ public class AnalystPopupMenu extends PopupMenuItemHttpMessageContainer {
                     && !"CUSTOM".equalsIgnoreCase(expectedMethod)
                     && actualMethod != null
                     && !actualMethod.equalsIgnoreCase(expectedMethod)) {
+                    String tmpl = Constant.messages.getString("aitrafficanalyst.methodMismatch.msg");
+                    String msgText = java.text.MessageFormat.format(tmpl, expectedMethod, actualMethod);
                     int choice = JOptionPane.showConfirmDialog(
                         View.getSingleton().getMainFrame(),
-                        "Warning: You selected 'Analyze "
-                            + expectedMethod
-                            + "' but this is a "
-                            + actualMethod
-                            + " request.\n"
-                            + "The AI might be confused by the missing/extra body data.\n\n"
-                            + "Do you want to continue anyway?",
-                        "Method Mismatch",
+                        msgText,
+                        Constant.messages.getString("aitrafficanalyst.methodMismatch.title"),
                         JOptionPane.YES_NO_OPTION,
                         JOptionPane.WARNING_MESSAGE);
                     if (choice == JOptionPane.NO_OPTION) {
@@ -221,7 +217,9 @@ public class AnalystPopupMenu extends PopupMenuItemHttpMessageContainer {
                                     // Notify user in panel that prompt was truncated
                                     javax.swing.SwingUtilities.invokeLater(() -> {
                                         if (extension.getAnalystPanel() != null) {
-                                            extension.getAnalystPanel().updateAnalysis(url, "⚠️ Prompt truncated to " + MAX_PROMPT_CHARS + " bytes before sending to model.");
+                                            String warnT = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.warn.promptTruncated");
+                                            String warnMsg = java.text.MessageFormat.format(warnT, Integer.toString(MAX_PROMPT_CHARS));
+                                            extension.getAnalystPanel().updateAnalysis(url, warnMsg);
                                         }
                                     });
                                 }
@@ -257,7 +255,9 @@ public class AnalystPopupMenu extends PopupMenuItemHttpMessageContainer {
                         LOGGER.error("LLM Analysis Failed", e);
                         javax.swing.SwingUtilities.invokeLater(() -> {
                             if (extension.getAnalystPanel() != null) {
-                                extension.getAnalystPanel().updateAnalysis(url, "❌ Error: " + e.getMessage());
+                                String errT = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.error");
+                                String errMsg = java.text.MessageFormat.format(errT, e.getMessage());
+                                extension.getAnalystPanel().updateAnalysis(url, errMsg);
                             }
                         });
                     }
@@ -279,7 +279,8 @@ public class AnalystPopupMenu extends PopupMenuItemHttpMessageContainer {
 
                             // Notify panel we're sending a live request
                             if (extension.getAnalystPanel() != null) {
-                                extension.getAnalystPanel().updateAnalysis(url, "📡 Sending live request to capture fresh response...");
+                                String sending = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.status.sending");
+                                extension.getAnalystPanel().updateAnalysis(url, sending);
                             }
 
                             // 1. Perform the live request
@@ -289,7 +290,9 @@ public class AnalystPopupMenu extends PopupMenuItemHttpMessageContainer {
 
                             // Show thinking state
                             if (extension.getAnalystPanel() != null) {
-                                extension.getAnalystPanel().updateAnalysis(url, "🤖 Thinking... (Querying " + modelName + " with live data)...");
+                                String tmpl = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.status.querying");
+                                String thinking = java.text.MessageFormat.format(tmpl, modelName);
+                                extension.getAnalystPanel().updateAnalysis(url, thinking);
                             }
 
                             // 2. Build the prompt using liveMsg
@@ -397,7 +400,9 @@ public class AnalystPopupMenu extends PopupMenuItemHttpMessageContainer {
                             LOGGER.error("LLM Analysis Failed", e);
                             javax.swing.SwingUtilities.invokeLater(() -> {
                                 if (extension.getAnalystPanel() != null) {
-                                    extension.getAnalystPanel().updateAnalysis(url, "❌ Error: " + e.getMessage());
+                                    String errT = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.error");
+                                    String errMsg = java.text.MessageFormat.format(errT, e.getMessage());
+                                    extension.getAnalystPanel().updateAnalysis(url, errMsg);
                                 }
                             });
                         }
@@ -409,7 +414,9 @@ public class AnalystPopupMenu extends PopupMenuItemHttpMessageContainer {
             LOGGER.error("Failed to initiate analysis for HTTP message", e);
             javax.swing.SwingUtilities.invokeLater(() -> {
                 if (extension.getAnalystPanel() != null) {
-                    extension.getAnalystPanel().updateAnalysis("(local)", "❌ Error initiating analysis: " + e.getMessage());
+                    String errT = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.error.initiating");
+                    String errMsg = java.text.MessageFormat.format(errT, e.getMessage());
+                    extension.getAnalystPanel().updateAnalysis("(local)", errMsg);
                 }
             });
         }

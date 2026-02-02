@@ -63,7 +63,7 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
 
     private void initGUI() {
         this.setLayout(new GridBagLayout());
-        this.setName("AI Traffic Analyst"); // Name in the tree on the left
+        this.setName(org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.name"));
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridx = 0;
@@ -86,6 +86,8 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
         txtLlmConfig.setWrapStyleWord(true);
         txtLlmConfig.setOpaque(false);
         txtLlmConfig.setFocusable(false);
+
+        lblLlmConfig.setLabelFor(txtLlmConfig);
 
         lblLlmStatus = new JLabel();
 
@@ -112,6 +114,8 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
                         org.parosproxy.paros.Constant.messages.getString(
                                 "aitrafficanalyst.options.role"));
         cboRole = new JComboBox<>();
+
+        lblRole.setLabelFor(cboRole);
 
         btnAddRole =
                 new JButton(
@@ -155,6 +159,8 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
                         org.parosproxy.paros.Constant.messages.getString(
                                 "aitrafficanalyst.options.role.prompt"));
         txtRolePrompt = new JTextArea(8, 60);
+
+        lblPrompt.setLabelFor(txtRolePrompt);
         JScrollPane promptScroll = new JScrollPane(txtRolePrompt);
 
         gbc.gridx = 0;
@@ -179,8 +185,10 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
                     int confirm =
                             JOptionPane.showConfirmDialog(
                                     this,
-                                    "Are you sure you want to reset all settings to their original defaults?",
-                                    "Confirm Reset",
+                                org.parosproxy.paros.Constant.messages.getString(
+                                    "aitrafficanalyst.options.reset.confirm"),
+                                org.parosproxy.paros.Constant.messages.getString(
+                                    "aitrafficanalyst.options.reset.title"),
                                     JOptionPane.YES_NO_OPTION);
 
                     if (confirm == JOptionPane.YES_OPTION) {

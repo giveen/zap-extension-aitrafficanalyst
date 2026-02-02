@@ -1,6 +1,7 @@
 package org.zaproxy.zap.extension.aitrafficanalyst.ai;
 
 import java.lang.reflect.Array;
+import org.parosproxy.paros.Constant;
 import org.parosproxy.paros.control.Control;
 import org.parosproxy.paros.extension.Extension;
 import org.parosproxy.paros.extension.ExtensionLoader;
@@ -128,7 +129,7 @@ public class LlmAddonClient implements AnalystLlmClient {
     public String getCommsIssue() {
         Extension ext = getExtensionLlm();
         if (ext == null) {
-            return "The ZAP LLM add-on is not available. Install/enable the 'LLM' add-on and restart ZAP (Manage Add-ons → Marketplace → LLM). If it is not listed in the Marketplace yet, build it from https://github.com/zaproxy/zap-extensions (addOns/llm) and install the resulting .zap from file.";
+            return Constant.messages.getString("aitrafficanalyst.llm.missing.detailed");
         }
         try {
             Object result = ext.getClass().getMethod("getCommsIssue").invoke(ext);
@@ -147,7 +148,7 @@ public class LlmAddonClient implements AnalystLlmClient {
         Extension ext = getExtensionLlm();
         if (ext == null) {
             throw new IllegalStateException(
-                    "The ZAP LLM add-on is not available. Install/enable the 'LLM' add-on and restart ZAP (Manage Add-ons → Marketplace → LLM). If it is not listed in the Marketplace yet, build it from https://github.com/zaproxy/zap-extensions (addOns/llm) and install the resulting .zap from file.");
+                    Constant.messages.getString("aitrafficanalyst.llm.missing.detailed"));
         }
 
         Object comms = ext.getClass()
@@ -159,7 +160,7 @@ public class LlmAddonClient implements AnalystLlmClient {
             if (issue != null && !issue.trim().isEmpty()) {
                 throw new IllegalStateException(issue);
             }
-            throw new IllegalStateException("The ZAP LLM add-on is not configured.");
+            throw new IllegalStateException(Constant.messages.getString("aitrafficanalyst.llm.notConfigured"));
         }
 
         Object response = comms.getClass().getMethod("chat", String.class).invoke(comms, prompt);
