@@ -212,9 +212,12 @@ public class AnalystPanel extends AbstractPanel {
         resultArea.setEditable(false);
         resultArea.setContentType("text/html");
 
-        // Fix: Add CSS rules directly to the EditorKit's StyleSheet
+        // IMPORTANT: Don't mutate HTMLEditorKit's shared default StyleSheet.
+        // Swing uses the same HTML renderer for many components (labels, menu items, etc.).
+        // If we call kit.getStyleSheet().addRule(...), those CSS rules can leak globally.
         HTMLEditorKit kit = new HTMLEditorKit();
-        StyleSheet styleSheet = kit.getStyleSheet();
+        StyleSheet styleSheet = new StyleSheet();
+        styleSheet.addStyleSheet(kit.getStyleSheet());
         styleSheet.addRule("body { font-family: sans-serif; padding: 15px; line-height: 1.5; }");
         styleSheet.addRule("h3 { color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 20px; }");
         styleSheet.addRule("code { background-color: #f8f9fa; padding: 2px 4px; border-radius: 4px; color: #e83e8c; font-family: monospace; }");
@@ -223,6 +226,7 @@ public class AnalystPanel extends AbstractPanel {
         styleSheet.addRule("pre code { background-color: transparent; padding: 0; color: inherit; }");
         styleSheet.addRule("blockquote { border-left: 5px solid #dfe2e5; color: #6a737d; padding-left: 1em; margin-left: 0; font-style: italic; }");
         styleSheet.addRule("hr { border: 0; border-top: 2px solid #eee; margin: 20px 0; }");
+        kit.setStyleSheet(styleSheet);
         resultArea.setEditorKit(kit);
 
         JScrollPane scrollPane = new JScrollPane(resultArea);
