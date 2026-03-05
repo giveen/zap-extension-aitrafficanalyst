@@ -216,7 +216,6 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
         this.executor.submit(
                 () -> {
                     try {
-                        String modelName = "LLM";
                         AnalystLlmClient client = getLlmClient();
                         if (client == null || !client.isConfigured()) {
                             String msgText = getLlmNotConfiguredMessage();
@@ -245,7 +244,7 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
                             String tmpl =
                                     org.parosproxy.paros.Constant.messages.getString(
                                             "aitrafficanalyst.status.querying");
-                            String thinking = java.text.MessageFormat.format(tmpl, modelName);
+                            String thinking = java.text.MessageFormat.format(tmpl, "LLM");
                             this.analystPanel.updateAnalysis(url, thinking);
                         }
 

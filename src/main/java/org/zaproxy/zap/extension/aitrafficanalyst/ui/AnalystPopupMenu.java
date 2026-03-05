@@ -5,7 +5,6 @@ import org.apache.logging.log4j.Logger;
 import java.awt.Frame;
 import javax.swing.JOptionPane;
 import org.parosproxy.paros.Constant;
-import org.parosproxy.paros.model.Model;
 import org.parosproxy.paros.network.HttpMessage;
 import org.parosproxy.paros.view.View;
 import org.zaproxy.zap.extension.aitrafficanalyst.ExtensionAiAnalyst;
