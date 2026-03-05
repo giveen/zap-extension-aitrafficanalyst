@@ -75,7 +75,11 @@ public class LlmAddonClient implements AnalystLlmClient {
             }
         }
 
-        this.extensionLlm = ext;
+        // Only cache a successful lookup; a null result means the add-on hasn't loaded yet
+        // and should be re-checked on the next call rather than remembered as permanently absent.
+        if (ext != null) {
+            this.extensionLlm = ext;
+        }
         return ext;
     }
 
