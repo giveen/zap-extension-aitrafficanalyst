@@ -1,6 +1,7 @@
 package org.zaproxy.zap.extension.aitrafficanalyst.ai;
 
 import java.lang.reflect.Array;
+import java.lang.reflect.InvocationTargetException;
 import org.parosproxy.paros.Constant;
 import org.parosproxy.paros.control.Control;
 import org.parosproxy.paros.extension.Extension;
@@ -188,6 +189,15 @@ public class LlmAddonClient implements AnalystLlmClient {
         try {
             Object response = comms.getClass().getMethod("chat", String.class).invoke(comms, prompt);
             return response != null ? response.toString() : "";
+        } catch (InvocationTargetException e) {
+            // Method.invoke wraps whatever the LLM add-on's chat() threw (bad API key, network
+            // error, rate limit, ...) in an InvocationTargetException whose own getMessage() is
+            // null, so unwrap it -- otherwise the real failure reason never reaches the panel.
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            if (cause instanceof Exception) {
+                throw (Exception) cause;
+            }
+            throw new Exception(cause.getMessage(), cause);
         } finally {
             // The LLM add-on caches one LlmCommunicationService per comms key and retains a
             // rolling window of prior chat turns on it, intended for its own interactive

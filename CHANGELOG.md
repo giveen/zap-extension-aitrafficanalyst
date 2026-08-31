@@ -21,6 +21,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Bump `commonlib` dependency to 1.40.0.
 
 ### Fixed
+- `LlmAddonClient.chat()` unwraps `InvocationTargetException` from the reflective call into the
+  LLM add-on's `chat()` method, so a real failure (bad API key, network error, rate limit) shows
+  its actual message on the Analyst panel instead of "Error: null".
+- `AnalystPanel.updateAnalysis` now also treats the "Sending live request..." status as
+  transient, alongside the "Thinking..." statuses; previously it was appended to the permanent
+  markdown history (and thus to saved reports / "Save as Alert" prefills) as a bogus finding on
+  every single analysis.
 - Evict the LLM add-on's cached communication service after each analysis so its rolling
   chat-memory window doesn't silently resend prior analyses' full request/response bodies
   (and their token cost) as "history" on every subsequent call, and doesn't leak one page's

@@ -273,9 +273,13 @@ public class AnalystPanel extends AbstractPanel {
         }
     }
     public void updateAnalysis(String url, String markdownText) {
-        // 1. If this is a "Thinking..." message, show temporary status without appending to history
+        // 1. Transient status updates ("Thinking...", "Sending live request...") are shown
+        // without being appended to the permanent history -- only the final result or an error
+        // should end up in the saved report.
         String thinkingKey = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.status.thinking");
-        if (markdownText != null && markdownText.contains(thinkingKey)) {
+        String sendingKey = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.status.sending");
+        if (markdownText != null
+                && (markdownText.contains(thinkingKey) || markdownText.contains(sendingKey))) {
             String temp = fullHistoryMarkdown.toString() + "\n\n*STATUS: " + markdownText + "*";
             renderHtml(temp);
             return;
