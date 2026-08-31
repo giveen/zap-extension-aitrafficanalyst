@@ -9,8 +9,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.text.MessageFormat;
 import javax.swing.ImageIcon;
+import javax.swing.SwingUtilities;
 import org.parosproxy.paros.Constant;
 import org.parosproxy.paros.extension.ExtensionAdaptor;
 import org.parosproxy.paros.extension.ExtensionHook;
@@ -184,15 +186,113 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
         }
     }
 
+    /** Posts a panel update to the EDT; a no-op if there is no panel (headless). */
+    private void updatePanelAsync(String url, String message) {
+        SwingUtilities.invokeLater(
+                () -> {
+                    if (this.analystPanel != null) {
+                        this.analystPanel.updateAnalysis(url, message);
+                    }
+                });
+    }
+
+    /**
+     * Truncates {@code combinedPrompt} to {@link #MAX_PROMPT_CHARS}, keeping a head and tail
+     * slice, and warns the panel if truncation occurred.
+     */
+    private String truncateForPromptLimit(String url, String combinedPrompt) {
+        if (combinedPrompt.length() <= MAX_PROMPT_CHARS) {
+            return combinedPrompt;
+        }
+        int reserve = 1024;
+        String head = combinedPrompt.substring(0, MAX_PROMPT_CHARS - reserve - 20);
+        String tail = combinedPrompt.substring(combinedPrompt.length() - reserve);
+        String warnT = Constant.messages.getString("aitrafficanalyst.warn.promptTruncated");
+        updatePanelAsync(url, MessageFormat.format(warnT, Integer.toString(MAX_PROMPT_CHARS)));
+        return head + "\n\n... [TRUNCATED FOR SIZE] ...\n\n" + tail;
+    }
+
+    /** Stores a short summary of the result in session memory; failures are non-fatal. */
+    private void recordSessionInsight(String url, String result) {
+        try {
+            String analysisResult = result != null ? result : "";
+            String summary =
+                    analysisResult.length() > 150
+                            ? analysisResult.substring(0, 150) + "..."
+                            : analysisResult;
+            summary = summary.replace("\r", " ").replace("\n", " ").trim();
+            addSessionInsight(url, summary);
+        } catch (RuntimeException e) {
+            LOGGER.debug("Failed to store session insight.", e);
+        }
+    }
+
+    /**
+     * Runs an analysis on the background executor: checks the LLM add-on is configured, performs
+     * a live request/response, builds the final prompt from {@code promptBodyBuilder}, sends it
+     * to the LLM add-on, and reports the outcome to the Analyst panel. Shared by {@link
+     * #analyzeRequest(HttpMessage, String)} and {@link #analyzeRequestCustom(HttpMessage, String,
+     * boolean, boolean)}, which differ only in how the prompt body is built.
+     */
+    private void submitAnalysis(
+            HttpMessage msg, String url, Function<HttpMessage, String> promptBodyBuilder) {
+        if (this.executor == null) {
+            return;
+        }
+        this.executor.submit(
+                () -> {
+                    try {
+                        AnalystLlmClient client = getLlmClient();
+                        if (client == null || !client.isConfigured()) {
+                            updatePanelAsync(url, getLlmNotConfiguredMessage());
+                            return;
+                        }
+
+                        updatePanelAsync(
+                                url, Constant.messages.getString("aitrafficanalyst.status.sending"));
+
+                        // Perform a live request to capture a fresh response.
+                        HttpSender sender = new HttpSender(HttpSender.MANUAL_REQUEST_INITIATOR);
+                        HttpMessage liveMsg = msg.cloneAll();
+                        sender.sendAndReceive(liveMsg);
+
+                        updatePanelAsync(
+                                url,
+                                MessageFormat.format(
+                                        Constant.messages.getString("aitrafficanalyst.status.querying"),
+                                        "LLM"));
+
+                        String promptBody = promptBodyBuilder.apply(liveMsg);
+                        String combinedPrompt =
+                                truncateForPromptLimit(url, SYSTEM_GUARD + "\n\n" + promptBody);
+
+                        // Tell the LLM add-on to return Markdown-friendly output.
+                        String finalPrompt =
+                                combinedPrompt
+                                        + "\n\n--- OUTPUT FORMAT ---\n"
+                                        + "Respond in Markdown. If your provider forces JSON output, return a single JSON object with a 'markdown' field containing the Markdown.\n";
+
+                        String result = client.chat(finalPrompt);
+
+                        recordSessionInsight(url, result);
+                        updatePanelAsync(url, result);
+                    } catch (Exception e) {
+                        LOGGER.error("Analysis failed", e);
+                        String errMsg =
+                                MessageFormat.format(
+                                        Constant.messages.getString("aitrafficanalyst.error"),
+                                        e.getMessage());
+                        updatePanelAsync(url, errMsg);
+                    }
+                });
+    }
+
     public void analyzeRequestCustom(
             HttpMessage msg,
             String customInstructions,
             boolean includeReq,
             boolean includeRes) {
-        if (msg == null) {
-            return;
-        }
-        if (getView() == null) {
+        if (msg == null || getView() == null) {
             return;
         }
 
@@ -201,163 +301,65 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
         if (this.analystPanel != null) {
             this.analystPanel.setLastMessage(msg);
             this.analystPanel.setTabFocus();
-            String modelName = "LLM";
             String tmpl =
-                    org.parosproxy.paros.Constant.messages.getString(
-                            "aitrafficanalyst.status.thinking_with_model");
-            String statusMsg = java.text.MessageFormat.format(tmpl, modelName);
-            this.analystPanel.updateAnalysis(url, statusMsg);
+                    Constant.messages.getString("aitrafficanalyst.status.thinking_with_model");
+            this.analystPanel.updateAnalysis(url, MessageFormat.format(tmpl, "LLM"));
         }
 
-        if (this.executor == null) {
-            return;
-        }
+        submitAnalysis(
+                msg,
+                url,
+                liveMsg -> {
+                    String rolePrompt =
+                            this.options != null
+                                    ? this.options.getRolePrompt(this.options.getActiveRole())
+                                    : null;
 
-        this.executor.submit(
-                () -> {
-                    try {
-                        AnalystLlmClient client = getLlmClient();
-                        if (client == null || !client.isConfigured()) {
-                            String msgText = getLlmNotConfiguredMessage();
-                            javax.swing.SwingUtilities.invokeLater(
-                                    () -> {
-                                        if (this.analystPanel != null) {
-                                            this.analystPanel.updateAnalysis(url, msgText);
-                                        }
-                                    });
-                            return;
-                        }
+                    StringBuilder prompt = new StringBuilder();
+                    prompt.append("--- SESSION CONTEXT (Previous findings in this session) ---\n")
+                            .append(getSessionContextFormatted())
+                            .append("\n")
+                            .append("-----------------------------------------------------------\n\n");
 
-                        if (this.analystPanel != null) {
-                            String sending =
-                                    org.parosproxy.paros.Constant.messages.getString(
-                                            "aitrafficanalyst.status.sending");
-                            this.analystPanel.updateAnalysis(url, sending);
-                        }
-
-                        // Perform a live request to capture a fresh response (matches GET/POST flow).
-                        HttpSender sender = new HttpSender(HttpSender.MANUAL_REQUEST_INITIATOR);
-                        HttpMessage liveMsg = msg.cloneAll();
-                        sender.sendAndReceive(liveMsg);
-
-                        if (this.analystPanel != null) {
-                            String tmpl =
-                                    org.parosproxy.paros.Constant.messages.getString(
-                                            "aitrafficanalyst.status.querying");
-                            String thinking = java.text.MessageFormat.format(tmpl, "LLM");
-                            this.analystPanel.updateAnalysis(url, thinking);
-                        }
-
-                        String rolePrompt = null;
-                        if (this.options != null) {
-                            String role = this.options.getActiveRole();
-                            rolePrompt = this.options.getRolePrompt(role);
-                        }
-
-                        StringBuilder prompt = new StringBuilder();
-
-                        // Session context + persona prompt
-                        prompt.append("--- SESSION CONTEXT (Previous findings in this session) ---\n")
-                                .append(getSessionContextFormatted())
-                                .append("\n")
-                                .append("-----------------------------------------------------------\n\n");
-
-                        if (rolePrompt != null && !rolePrompt.trim().isEmpty()) {
-                            prompt.append(rolePrompt.trim()).append("\n\n");
-                        } else {
-                            prompt.append("You are a Security Analyst assisting with a specific task.\n\n");
-                        }
-
-                        String instr = customInstructions == null ? "" : customInstructions.trim();
-                        if (!instr.isEmpty()) {
-                            prompt.append("--- USER OVERRIDE INSTRUCTIONS ---\n")
-                                    .append("The user has provided specific focus for this analysis:\n")
-                                    .append(instr)
-                                    .append("\n")
-                                    .append("----------------------------------\n\n");
-                        }
-
-                        if (includeReq) {
-                            prompt.append("--- HTTP REQUEST ---\n");
-                            prompt.append(liveMsg.getRequestHeader().toString()).append("\n");
-                            if (liveMsg.getRequestBody() != null && liveMsg.getRequestBody().length() > 0) {
-                                prompt.append(liveMsg.getRequestBody().toString()).append("\n");
-                            }
-                            prompt.append("\n");
-                        }
-
-                        if (includeRes) {
-                            prompt.append("--- HTTP RESPONSE ---\n");
-                            prompt.append(liveMsg.getResponseHeader().toString()).append("\n");
-                            if (liveMsg.getResponseBody() != null && liveMsg.getResponseBody().length() > 0) {
-                                String body = liveMsg.getResponseBody().toString();
-                                if (body.length() > 5000) {
-                                    body = body.substring(0, 5000) + "... [TRUNCATED]";
-                                }
-                                prompt.append(body).append("\n");
-                            }
-                            prompt.append("\n");
-                        }
-
-                        prompt.append("Respond with findings and concrete next steps/tests.\n");
-
-                        String combinedPrompt = SYSTEM_GUARD + "\n\n" + prompt;
-                        if (combinedPrompt.length() > MAX_PROMPT_CHARS) {
-                            int reserve = 1024;
-                            String head = combinedPrompt.substring(0, MAX_PROMPT_CHARS - reserve - 20);
-                            String tail = combinedPrompt.substring(combinedPrompt.length() - reserve);
-                            combinedPrompt = head + "\n\n... [TRUNCATED FOR SIZE] ...\n\n" + tail;
-                            javax.swing.SwingUtilities.invokeLater(
-                                    () -> {
-                                        if (this.analystPanel != null) {
-                                            String warnT =
-                                                    org.parosproxy.paros.Constant.messages.getString(
-                                                            "aitrafficanalyst.warn.promptTruncated");
-                                            String warnMsg =
-                                                    java.text.MessageFormat.format(
-                                                            warnT, Integer.toString(MAX_PROMPT_CHARS));
-                                            this.analystPanel.updateAnalysis(url, warnMsg);
-                                        }
-                                    });
-                        }
-
-                                // Tell the LLM add-on to return Markdown-friendly output.
-                                String finalPrompt =
-                                    combinedPrompt
-                                        + "\n\n--- OUTPUT FORMAT ---\n"
-                                        + "Respond in Markdown. If your provider forces JSON output, return a single JSON object with a 'markdown' field containing the Markdown.\n";
-
-                                String result = client.chat(finalPrompt);
-
-                        try {
-                            String analysisResult = result != null ? result : "";
-                            String summary =
-                                    analysisResult.length() > 150
-                                            ? analysisResult.substring(0, 150) + "..."
-                                            : analysisResult;
-                            summary = summary.replace("\r", " ").replace("\n", " ").trim();
-                            addSessionInsight(url, summary);
-                        } catch (RuntimeException e) {
-                            LOGGER.debug("Failed to store session insight.", e);
-                        }
-
-                        javax.swing.SwingUtilities.invokeLater(
-                                () -> {
-                                    if (this.analystPanel != null) {
-                                        this.analystPanel.updateAnalysis(url, result);
-                                    }
-                                });
-                    } catch (Exception e) {
-                        LOGGER.error("Custom analysis failed", e);
-                        javax.swing.SwingUtilities.invokeLater(
-                                () -> {
-                                    if (this.analystPanel != null) {
-                                        String errT = Constant.messages.getString("aitrafficanalyst.error");
-                                        String errMsg = MessageFormat.format(errT, e.getMessage());
-                                        this.analystPanel.updateAnalysis(url, errMsg);
-                                    }
-                                });
+                    if (rolePrompt != null && !rolePrompt.trim().isEmpty()) {
+                        prompt.append(rolePrompt.trim()).append("\n\n");
+                    } else {
+                        prompt.append("You are a Security Analyst assisting with a specific task.\n\n");
                     }
+
+                    String instr = customInstructions == null ? "" : customInstructions.trim();
+                    if (!instr.isEmpty()) {
+                        prompt.append("--- USER OVERRIDE INSTRUCTIONS ---\n")
+                                .append("The user has provided specific focus for this analysis:\n")
+                                .append(instr)
+                                .append("\n")
+                                .append("----------------------------------\n\n");
+                    }
+
+                    if (includeReq) {
+                        prompt.append("--- HTTP REQUEST ---\n");
+                        prompt.append(liveMsg.getRequestHeader().toString()).append("\n");
+                        if (liveMsg.getRequestBody() != null && liveMsg.getRequestBody().length() > 0) {
+                            prompt.append(liveMsg.getRequestBody().toString()).append("\n");
+                        }
+                        prompt.append("\n");
+                    }
+
+                    if (includeRes) {
+                        prompt.append("--- HTTP RESPONSE ---\n");
+                        prompt.append(liveMsg.getResponseHeader().toString()).append("\n");
+                        if (liveMsg.getResponseBody() != null && liveMsg.getResponseBody().length() > 0) {
+                            String body = liveMsg.getResponseBody().toString();
+                            if (body.length() > 5000) {
+                                body = body.substring(0, 5000) + "... [TRUNCATED]";
+                            }
+                            prompt.append(body).append("\n");
+                        }
+                        prompt.append("\n");
+                    }
+
+                    prompt.append("Respond with findings and concrete next steps/tests.\n");
+                    return prompt.toString();
                 });
     }
 
@@ -373,13 +375,7 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
      * @param actualMethod the HTTP method string (used only to label the POST body section)
      */
     public void analyzeRequest(HttpMessage msg, String actualMethod) {
-        if (msg == null) {
-            return;
-        }
-        if (getView() == null) {
-            return;
-        }
-        if (this.executor == null) {
+        if (msg == null || getView() == null) {
             return;
         }
 
@@ -392,148 +388,69 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
             this.analystPanel.updateAnalysis(url, MessageFormat.format(tmpl, "LLM"));
         }
 
-        this.executor.submit(() -> {
-            try {
-                AnalystLlmClient client = getLlmClient();
-                if (client == null || !client.isConfigured()) {
-                    String msgText = getLlmNotConfiguredMessage();
-                    javax.swing.SwingUtilities.invokeLater(() -> {
-                        if (this.analystPanel != null) {
-                            this.analystPanel.updateAnalysis(url, msgText);
+        submitAnalysis(
+                msg,
+                url,
+                liveMsg -> {
+                    // Build the role-aware system prompt.
+                    String basePrompt = null;
+                    if (this.options != null) {
+                        String role = this.options.getActiveRole();
+                        String rp = this.options.getRolePrompt(role);
+                        if (rp != null && !rp.isEmpty()) {
+                            basePrompt = rp;
                         }
-                    });
-                    return;
-                }
-
-                if (this.analystPanel != null) {
-                    String sending =
-                            Constant.messages.getString("aitrafficanalyst.status.sending");
-                    this.analystPanel.updateAnalysis(url, sending);
-                }
-
-                HttpSender sender = new HttpSender(HttpSender.MANUAL_REQUEST_INITIATOR);
-                HttpMessage liveMsg = msg.cloneAll();
-                sender.sendAndReceive(liveMsg);
-
-                if (this.analystPanel != null) {
-                    String tmpl =
-                            Constant.messages.getString("aitrafficanalyst.status.querying");
-                    this.analystPanel.updateAnalysis(url, MessageFormat.format(tmpl, "LLM"));
-                }
-
-                // Build the role-aware system prompt.
-                String basePrompt = null;
-                if (this.options != null) {
-                    String role = this.options.getActiveRole();
-                    String rp = this.options.getRolePrompt(role);
-                    if (rp != null && !rp.isEmpty()) {
-                        basePrompt = rp;
                     }
-                }
-                String systemPrompt;
-                if (this.analystPanel != null) {
-                    systemPrompt =
-                            this.analystPanel.buildSessionAwareSystemPrompt(this, basePrompt);
-                } else {
-                    String previousContext = getSessionContextFormatted();
-                    StringBuilder sp = new StringBuilder();
-                    sp.append("You are an OWASP security expert.\n")
-                            .append("--- SESSION CONTEXT (Previous findings in this session) ---\n")
-                            .append(previousContext)
-                            .append("\n-----------------------------------------------------------\n");
-                    if (basePrompt != null && !basePrompt.trim().isEmpty()) {
-                        sp.append(basePrompt.trim()).append("\n");
+                    String systemPrompt;
+                    if (this.analystPanel != null) {
+                        systemPrompt =
+                                this.analystPanel.buildSessionAwareSystemPrompt(this, basePrompt);
                     } else {
-                        sp.append(
-                                        "Analyze the following HTTP request for vulnerabilities...")
-                                .append("\n");
-                    }
-                    systemPrompt = sp.toString();
-                }
-
-                StringBuilder sb = new StringBuilder();
-                sb.append(systemPrompt).append("\n\n");
-
-                sb.append("--- LIVE REQUEST ---\n");
-                sb.append(liveMsg.getRequestHeader().toString()).append("\n");
-                if ("POST".equalsIgnoreCase(actualMethod)) {
-                    sb.append("\n--- POST DATA ---\n");
-                }
-                if (liveMsg.getRequestBody().length() > 0) {
-                    sb.append(liveMsg.getRequestBody().toString()).append("\n");
-                } else if ("POST".equalsIgnoreCase(actualMethod)) {
-                    sb.append("(empty body)\n");
-                }
-
-                sb.append("\n--- LIVE RESPONSE ---\n");
-                sb.append(liveMsg.getResponseHeader().toString()).append("\n");
-                if (liveMsg.getResponseBody().length() > 0) {
-                    String body = liveMsg.getResponseBody().toString();
-                    if (body.length() > 5000) {
-                        body = body.substring(0, 5000) + "... [TRUNCATED]";
-                    }
-                    sb.append(body).append("\n");
-                }
-
-                sb.append("\n--- END CONVERSATION ---\n");
-                sb.append(
-                        "Analyze the interaction. Did the response confirm any vulnerabilities suggested by the request?");
-
-                String combinedPrompt = SYSTEM_GUARD + "\n\n" + sb;
-                if (combinedPrompt.length() > MAX_PROMPT_CHARS) {
-                    int reserve = 1024;
-                    String head = combinedPrompt.substring(0, MAX_PROMPT_CHARS - reserve - 20);
-                    String tail = combinedPrompt.substring(combinedPrompt.length() - reserve);
-                    combinedPrompt =
-                            head + "\n\n... [TRUNCATED FOR SIZE] ...\n\n" + tail;
-                    javax.swing.SwingUtilities.invokeLater(() -> {
-                        if (this.analystPanel != null) {
-                            String warnT =
-                                    Constant.messages.getString(
-                                            "aitrafficanalyst.warn.promptTruncated");
-                            String warnMsg =
-                                    MessageFormat.format(
-                                            warnT, Integer.toString(MAX_PROMPT_CHARS));
-                            this.analystPanel.updateAnalysis(url, warnMsg);
+                        String previousContext = getSessionContextFormatted();
+                        StringBuilder sp = new StringBuilder();
+                        sp.append("You are an OWASP security expert.\n")
+                                .append("--- SESSION CONTEXT (Previous findings in this session) ---\n")
+                                .append(previousContext)
+                                .append("\n-----------------------------------------------------------\n");
+                        if (basePrompt != null && !basePrompt.trim().isEmpty()) {
+                            sp.append(basePrompt.trim()).append("\n");
+                        } else {
+                            sp.append(
+                                            "Analyze the following HTTP request for vulnerabilities...")
+                                    .append("\n");
                         }
-                    });
-                }
-
-                String finalPrompt =
-                        combinedPrompt
-                                + "\n\n--- OUTPUT FORMAT ---\n"
-                                + "Respond in Markdown. If your provider forces JSON output, return a single JSON object with a 'markdown' field containing the Markdown.\n";
-
-                String result = client.chat(finalPrompt);
-
-                try {
-                    String analysisResult = result != null ? result : "";
-                    String summary =
-                            analysisResult.length() > 150
-                                    ? analysisResult.substring(0, 150) + "..."
-                                    : analysisResult;
-                    summary = summary.replace("\r", " ").replace("\n", " ").trim();
-                    addSessionInsight(url, summary);
-                } catch (RuntimeException e) {
-                    LOGGER.debug("Failed to store session insight.", e);
-                }
-
-                javax.swing.SwingUtilities.invokeLater(() -> {
-                    if (this.analystPanel != null) {
-                        this.analystPanel.updateAnalysis(url, result);
+                        systemPrompt = sp.toString();
                     }
-                });
-            } catch (Exception e) {
-                LOGGER.error("LLM analysis failed", e);
-                javax.swing.SwingUtilities.invokeLater(() -> {
-                    if (this.analystPanel != null) {
-                        String errT = Constant.messages.getString("aitrafficanalyst.error");
-                        String errMsg = MessageFormat.format(errT, e.getMessage());
-                        this.analystPanel.updateAnalysis(url, errMsg);
+
+                    StringBuilder sb = new StringBuilder();
+                    sb.append(systemPrompt).append("\n\n");
+
+                    sb.append("--- LIVE REQUEST ---\n");
+                    sb.append(liveMsg.getRequestHeader().toString()).append("\n");
+                    if ("POST".equalsIgnoreCase(actualMethod)) {
+                        sb.append("\n--- POST DATA ---\n");
                     }
+                    if (liveMsg.getRequestBody().length() > 0) {
+                        sb.append(liveMsg.getRequestBody().toString()).append("\n");
+                    } else if ("POST".equalsIgnoreCase(actualMethod)) {
+                        sb.append("(empty body)\n");
+                    }
+
+                    sb.append("\n--- LIVE RESPONSE ---\n");
+                    sb.append(liveMsg.getResponseHeader().toString()).append("\n");
+                    if (liveMsg.getResponseBody().length() > 0) {
+                        String body = liveMsg.getResponseBody().toString();
+                        if (body.length() > 5000) {
+                            body = body.substring(0, 5000) + "... [TRUNCATED]";
+                        }
+                        sb.append(body).append("\n");
+                    }
+
+                    sb.append("\n--- END CONVERSATION ---\n");
+                    sb.append(
+                            "Analyze the interaction. Did the response confirm any vulnerabilities suggested by the request?");
+                    return sb.toString();
                 });
-            }
-        });
     }
 
     @Override

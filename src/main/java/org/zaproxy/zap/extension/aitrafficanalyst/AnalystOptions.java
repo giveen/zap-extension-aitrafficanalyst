@@ -432,7 +432,9 @@ public class AnalystOptions extends AbstractParam {
         return out.isEmpty() ? null : out;
     }
 
-    private static Map<String, String> parseRolesJson(String rolesJson) {
+    // Package-private (not private) so AnalystOptionsTest can exercise the legacy-migration path
+    // directly without needing a full AbstractParam/Configuration setup.
+    static Map<String, String> parseRolesJson(String rolesJson) {
         if (rolesJson == null) {
             return null;
         }
@@ -441,134 +443,20 @@ public class AnalystOptions extends AbstractParam {
             return null;
         }
         try {
-            int[] idx = new int[] {0};
-            skipWs(s, idx);
-            if (idx[0] >= s.length() || s.charAt(idx[0]) != '{') {
-                return null;
-            }
-            idx[0]++; // {
+            net.sf.json.JSONObject json = net.sf.json.JSONObject.fromObject(s);
             Map<String, String> out = new LinkedHashMap<>();
-            while (true) {
-                skipWs(s, idx);
-                if (idx[0] >= s.length()) {
-                    return null;
-                }
-                char c = s.charAt(idx[0]);
-                if (c == '}') {
-                    idx[0]++;
-                    break;
-                }
-                String key = parseJsonString(s, idx);
-                if (key == null) {
-                    return null;
-                }
-                skipWs(s, idx);
-                if (idx[0] >= s.length() || s.charAt(idx[0]) != ':') {
-                    return null;
-                }
-                idx[0]++;
-                skipWs(s, idx);
-                String value = parseJsonString(s, idx);
-                if (value == null) {
-                    return null;
-                }
-                if (!key.trim().isEmpty()) {
-                    out.put(key, value);
-                }
-                skipWs(s, idx);
-                if (idx[0] >= s.length()) {
-                    return null;
-                }
-                char sep = s.charAt(idx[0]);
-                if (sep == ',') {
-                    idx[0]++;
+            for (Object keyObj : json.keySet()) {
+                String key = String.valueOf(keyObj);
+                if (key.trim().isEmpty()) {
                     continue;
                 }
-                if (sep == '}') {
-                    idx[0]++;
-                    break;
-                }
-                return null;
+                Object value = json.get(key);
+                out.put(key, value == null ? "" : value.toString());
             }
             return out.isEmpty() ? null : out;
         } catch (RuntimeException e) {
             return null;
         }
-    }
-
-    private static void skipWs(String s, int[] idx) {
-        while (idx[0] < s.length()) {
-            char c = s.charAt(idx[0]);
-            if (c == ' ' || c == '\n' || c == '\r' || c == '\t') {
-                idx[0]++;
-            } else {
-                return;
-            }
-        }
-    }
-
-    private static String parseJsonString(String s, int[] idx) {
-        if (idx[0] >= s.length() || s.charAt(idx[0]) != '"') {
-            return null;
-        }
-        idx[0]++; // opening quote
-        StringBuilder sb = new StringBuilder();
-        while (idx[0] < s.length()) {
-            char c = s.charAt(idx[0]++);
-            if (c == '"') {
-                return sb.toString();
-            }
-            if (c != '\\') {
-                sb.append(c);
-                continue;
-            }
-            if (idx[0] >= s.length()) {
-                return null;
-            }
-            char esc = s.charAt(idx[0]++);
-            switch (esc) {
-                case '"':
-                    sb.append('"');
-                    break;
-                case '\\':
-                    sb.append('\\');
-                    break;
-                case '/':
-                    sb.append('/');
-                    break;
-                case 'b':
-                    sb.append('\b');
-                    break;
-                case 'f':
-                    sb.append('\f');
-                    break;
-                case 'n':
-                    sb.append('\n');
-                    break;
-                case 'r':
-                    sb.append('\r');
-                    break;
-                case 't':
-                    sb.append('\t');
-                    break;
-                case 'u':
-                    if (idx[0] + 4 > s.length()) {
-                        return null;
-                    }
-                    String hex = s.substring(idx[0], idx[0] + 4);
-                    idx[0] += 4;
-                    try {
-                        int code = Integer.parseInt(hex, 16);
-                        sb.append((char) code);
-                    } catch (NumberFormatException e) {
-                        return null;
-                    }
-                    break;
-                default:
-                    return null;
-            }
-        }
-        return null;
     }
 
     public void resetToDefaults() {

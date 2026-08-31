@@ -9,10 +9,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   chat-memory window doesn't silently resend prior analyses' full request/response bodies
   (and their token cost) as "history" on every subsequent call, and doesn't leak one page's
   traffic content into another page's analysis.
+- `./gradlew test` was silently running zero tests (no `useJUnitPlatform()`), so the existing
+  JUnit 5 test classes were never actually executed. Now wired up correctly.
 
 ### Changed
 - Declare the dependency on the official LLM add-on via the `zapAddOn` manifest `dependencies`
   DSL instead of a manual post-build XML patch of `ZapAddOn.xml`.
+- Replace the hand-rolled recursive-descent JSON parser used for legacy role-config migration
+  with `net.sf.json-lib`, which ZAP core already bundles at runtime.
+- Deduplicate the near-identical analysis pipelines in `analyzeRequest`/`analyzeRequestCustom`
+  (LLM-configured check, live request, prompt truncation, chat call, result/error reporting)
+  into a single shared `submitAnalysis` helper; each method now only builds its own prompt body.
+
+### Added
+- Unit tests for the JSON role-config migration parser (`AnalystOptionsTest`).
 
 ## [1.2.0] - 2026-02-01
 ### Added

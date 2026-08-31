@@ -80,6 +80,10 @@ java {
     targetCompatibility = javaVersion
 }
 
+tasks.test {
+    useJUnitPlatform()
+}
+
 spotless {
     kotlinGradle {
         ktlint()
@@ -90,6 +94,9 @@ dependencies {
     // Core ZAP dependencies are provided by the plugin.
     // Keep commonlib as compileOnly for existing example rules.
     compileOnly("org.zaproxy.addon:commonlib:1.36.0")
+    // ZAP core bundles json-lib (declared `api` in zaproxy/zap.gradle.kts), so it's always on
+    // the runtime classpath; compileOnly avoids bundling a second copy in our own jar.
+    compileOnly("net.sf.json-lib:json-lib:2.4:jdk15")
 
     // Add these for our AI logic:
     implementation("org.commonmark:commonmark:0.21.0")
@@ -98,4 +105,7 @@ dependencies {
     // Testing
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.0")
+    // json-lib is compileOnly for main (provided by ZAP core at runtime), but tests run outside
+    // ZAP, so it needs to be present on the test runtime classpath explicitly.
+    testRuntimeOnly("net.sf.json-lib:json-lib:2.4:jdk15")
 }
