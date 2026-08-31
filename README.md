@@ -8,10 +8,11 @@ A security analysis add-on for OWASP ZAP that augments ZAP by feeding live reque
 
 - **Live Analysis:** Clones and resends the selected request to capture a fresh response before analysis.
 - **OWASP-first:** Prompts and reporting are rooted in the OWASP Top 10 (2021–2026) framework for focused vulnerability discovery.
-- **Provider-agnostic:** Works with any provider configured in the ZAP LLM add-on (local or remote).
-- **Hardware-accelerated:** Designed to leverage local accelerators for high throughput (tested on high-end GPUs).
+- **Provider-agnostic:** Delegates all LLM communication to the official **ZAP LLM add-on**, so it works with any provider configured there (local or remote) — this add-on has no provider config of its own.
+- **Model-aware status:** Status messages show the actual configured model name (e.g. "Querying claude-sonnet-5...") rather than a generic placeholder.
 - **Rich UI:** Persistent, Markdown-rendered analysis tab with configurable appearance and high-contrast iconography.
 - **Configurable roles:** Customize analyst roles/prompts from the Options panel—no recompilation required.
+- **Session memory:** Keeps a rolling summary of the last few findings in the session to give follow-up analyses context.
 
 ---
 
@@ -20,27 +21,18 @@ A security analysis add-on for OWASP ZAP that augments ZAP by feeding live reque
 ### Prerequisites
 
 - OWASP ZAP **2.15.0+**.
-- The **LLM** add-on installed/enabled.
+- The official **LLM** add-on (`org.zaproxy.addon.llm`) installed and enabled — this add-on declares a hard manifest dependency on it and won't load without it.
 - An LLM provider configured via **Tools → Options → LLM**.
 
-Note: the upstream LLM add-on is still under active development. If it is not available in your ZAP Marketplace yet, you can build it from source (see below).
-
-### Installing the ZAP LLM add-on (if not in Marketplace yet)
-
-1. Clone the ZAP add-ons repo:
+Install the LLM add-on from **Manage Add-ons → Marketplace → LLM** first. If it isn't listed in your Marketplace yet, build it from source:
 
 ```bash
 git clone https://github.com/zaproxy/zap-extensions.git
 cd zap-extensions
-```
-
-2. Build the LLM add-on:
-
-```bash
 ./gradlew :addOns:llm:jarZapAddOn
 ```
 
-3. Install the generated `.zap` in ZAP via **Manage Add-ons → Install Add-on from File…**, then restart ZAP.
+Then install the generated `.zap` via **Manage Add-ons → Install Add-on from File…**, and restart ZAP.
 
 ### Build from Source
 
@@ -68,8 +60,8 @@ Install the add-on in ZAP via **Manage Add-ons → Install Add-on from File…**
 
 1. Configure the LLM provider: **Tools → Options → LLM**.
 2. (Optional) Configure prompts/roles: **Tools → Options → AI Traffic Analyst**.
-3. Analyze: Right-click any request in ZAP History and choose **AI Analyst**. The add-on clones and resends the request to collect a live response, then sends the combined request+response to the configured provider.
-4. Review: Results appear in the **AI Analysis** tab.
+3. Analyze: Right-click any request in ZAP History and choose **AI Analyst → Analyze GET / Analyze POST / Custom Analysis...**. The add-on clones and resends the request to collect a live response, then sends the combined request+response to the configured provider. **Custom Analysis** additionally lets you supply your own focus instructions and choose whether to include the request, the response, or both.
+4. Review: Results appear in the **AI Analysis** tab, rendered as Markdown.
 
 ---
 
@@ -132,17 +124,19 @@ Use this checklist to quickly validate a packaged `.zap` before publishing.
 - Configure a provider in **Tools → Options → LLM**.
 - Install this add-on: Manage Add-ons → Install Add-on from File… → select the built `.zap` in `build/zapAddOn/bin/`.
 - Generate some traffic (browse a site or use a sample request) so History has entries.
-- Right-click a History entry → **AI Analyst** → run **Analyze Request** (and optionally **Analyze GET/POST**).
-- Confirm output appears in the **AI Analysis** tab and renders as Markdown.
+- Right-click a History entry → **AI Analyst** → run **Analyze GET/POST** (and optionally **Custom Analysis...**).
+- Confirm output appears in the **AI Analysis** tab, renders as Markdown, and the status line names the actual configured model.
 
-Negative check:
-- Temporarily remove/disable the provider config in **Tools → Options → LLM**, then re-run analysis and confirm the add-on shows a clear “LLM not configured” guidance message.
+Negative checks:
+- Temporarily remove/disable the provider config in **Tools → Options → LLM**, then re-run analysis and confirm the add-on shows a clear "LLM not configured" guidance message.
+- Disable the LLM add-on entirely and confirm this add-on either fails to load (per its manifest dependency) or reports the LLM add-on as missing rather than throwing.
 
 ## Notes & Troubleshooting
 
 - If analysis says the LLM is not configured, configure it via **Tools → Options → LLM**.
 - If you want private/local-only usage, configure a local provider in the LLM add-on (for example, a locally hosted model provider).
-- If the plugin doesn't load, check `ZapAddOn.xml` version constraints and the ZAP log for errors.
+- If this add-on won't load, check that the LLM add-on is installed and enabled first — it's a hard manifest dependency, so ZAP won't load this add-on without it. Also check the ZAP log for errors.
+- Each analysis is sent as a fresh, memory-free call to the LLM add-on's chat service — findings from one request are not carried into another's conversation history (only the short on-panel "session context" summary is reused, and only within this add-on).
 
 ---
 
