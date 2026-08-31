@@ -27,7 +27,11 @@ public class LlmAddonClient implements AnalystLlmClient {
             return cached;
         }
 
-        ExtensionLoader loader = Control.getSingleton().getExtensionLoader();
+        // Control.getSingleton() is a plain static field, null until ZAP initializes it (e.g.
+        // when called from a unit test, or theoretically very early in startup), so it can't be
+        // dereferenced directly.
+        Control control = Control.getSingleton();
+        ExtensionLoader loader = control != null ? control.getExtensionLoader() : null;
         Extension ext = loader != null ? loader.getExtension(EXTENSION_LLM_NAME) : null;
 
         // Try alternate keys (some APIs use class name).
@@ -137,6 +141,20 @@ public class LlmAddonClient implements AnalystLlmClient {
         }
         try {
             Object result = ext.getClass().getMethod("getCommsIssue").invoke(ext);
+            return result != null ? result.toString() : "";
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    @Override
+    public String getModelName() {
+        Extension ext = getExtensionLlm();
+        if (ext == null) {
+            return "";
+        }
+        try {
+            Object result = ext.getClass().getMethod("getDefaultModelName").invoke(ext);
             return result != null ? result.toString() : "";
         } catch (Exception e) {
             return "";

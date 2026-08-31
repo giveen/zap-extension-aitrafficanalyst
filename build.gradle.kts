@@ -44,7 +44,7 @@ tasks.named<Jar>("jar") {
 
 // (Manifest post-processing will be appended at the end of the file)
 
-description = "A template for a 3rd party ZAP Java add-on."
+description = "AI-driven traffic analysis using the ZAP LLM add-on."
 
 zapAddOn {
     addOnId.set("aitrafficanalyst")
@@ -93,7 +93,7 @@ spotless {
 dependencies {
     // Core ZAP dependencies are provided by the plugin.
     // Keep commonlib as compileOnly for existing example rules.
-    compileOnly("org.zaproxy.addon:commonlib:1.36.0")
+    compileOnly("org.zaproxy.addon:commonlib:1.40.0")
     // ZAP core bundles json-lib (declared `api` in zaproxy/zap.gradle.kts), so it's always on
     // the runtime classpath; compileOnly avoids bundling a second copy in our own jar.
     compileOnly("net.sf.json-lib:json-lib:2.4:jdk15")

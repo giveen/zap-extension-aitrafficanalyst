@@ -149,6 +149,16 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
         return Constant.messages.getString("aitrafficanalyst.llm.notConfigured");
     }
 
+    /** The configured model's display name for status messages, falling back to "LLM". */
+    private String displayModelName() {
+        AnalystLlmClient client = getLlmClient();
+        if (client == null) {
+            return "LLM";
+        }
+        String name = client.getModelName();
+        return (name != null && !name.trim().isEmpty()) ? name.trim() : "LLM";
+    }
+
     /**
      * Adds a brief summary of a finding to the session memory.
      * Keeps the list size fixed at MAX_CONTEXT_SIZE.
@@ -260,7 +270,7 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
                                 url,
                                 MessageFormat.format(
                                         Constant.messages.getString("aitrafficanalyst.status.querying"),
-                                        "LLM"));
+                                        displayModelName()));
 
                         String promptBody = promptBodyBuilder.apply(liveMsg);
                         String combinedPrompt =
@@ -303,7 +313,7 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
             this.analystPanel.setTabFocus();
             String tmpl =
                     Constant.messages.getString("aitrafficanalyst.status.thinking_with_model");
-            this.analystPanel.updateAnalysis(url, MessageFormat.format(tmpl, "LLM"));
+            this.analystPanel.updateAnalysis(url, MessageFormat.format(tmpl, displayModelName()));
         }
 
         submitAnalysis(
@@ -385,7 +395,7 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
             this.analystPanel.setTabFocus();
             String tmpl =
                     Constant.messages.getString("aitrafficanalyst.status.thinking_with_model");
-            this.analystPanel.updateAnalysis(url, MessageFormat.format(tmpl, "LLM"));
+            this.analystPanel.updateAnalysis(url, MessageFormat.format(tmpl, displayModelName()));
         }
 
         submitAnalysis(

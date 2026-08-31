@@ -16,6 +16,9 @@ public interface AnalystLlmClient {
      */
     String getCommsIssue();
 
+    /** @return the currently configured default model name, or empty string if unknown. */
+    String getModelName();
+
     /**
      * Sends a single prompt to the configured model.
      *

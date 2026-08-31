@@ -84,7 +84,6 @@ public class AnalystPanel extends AbstractPanel {
     public void init() {
         this.setLayout(new BorderLayout());
         this.setName(org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.panel.name")); // This is the tab name
-        // this.setIcon(new ImageIcon(getClass().getResource("/resource/icon.png"))); // TODO: Add icon later
 
         // Try to load bundled icon from resources and scale it down to a fixed 16x16 BufferedImage
         try {
