@@ -25,24 +25,38 @@ import org.commonmark.node.Node;
 import org.commonmark.parser.Parser;
 import org.commonmark.renderer.html.HtmlRenderer;
 import org.jsoup.Jsoup;
-import org.jsoup.safety.Safelist;
 import org.junit.jupiter.api.Test;
 
 public class AnalystPanelSanitizationTest {
 
-    @Test
-    public void testScriptTagIsSanitized() {
-        String malicious = "Hello<script>alert('x')</script>World";
-
+    private static String renderAndClean(String markdown) {
         Parser parser = Parser.builder().build();
         HtmlRenderer renderer = HtmlRenderer.builder().softbreak("<br/>").escapeHtml(true).build();
-        Node document = parser.parse(malicious);
+        Node document = parser.parse(markdown);
         String html = renderer.render(document);
-        String cleaned = Jsoup.clean(html, Safelist.basic());
+        // Exercise AnalystPanel's actual sanitizer (not a hand-copied Safelist.basic()) so this
+        // test tracks whatever renderHtml really uses.
+        return Jsoup.clean(html, AnalystPanel.ANALYSIS_SAFELIST);
+    }
+
+    @Test
+    public void testScriptTagIsSanitized() {
+        String cleaned = renderAndClean("Hello<script>alert('x')</script>World");
 
         assertFalse(cleaned.contains("<script"), "Sanitized HTML must not contain <script>");
         assertFalse(
                 cleaned.toLowerCase().contains("javascript:"),
                 "Sanitized HTML must not contain javascript: URIs");
+    }
+
+    @Test
+    public void testHeadingsAndHorizontalRulesSurviveSanitization() {
+        // Regression test: Safelist.basic() alone strips <h1-6> and <hr> entirely, which used to
+        // silently discard the "### Analysis for: <url>" / "---" separators AnalystPanel injects
+        // between history entries, plus any headings in the model's own Markdown output.
+        String cleaned = renderAndClean("### Analysis for: http://example.com\n\n---\n\nBody text");
+
+        assertTrue(cleaned.contains("<h3>"), "Headings must survive sanitization");
+        assertTrue(cleaned.contains("<hr"), "Horizontal rules must survive sanitization");
     }
 }

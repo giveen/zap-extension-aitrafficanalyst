@@ -36,6 +36,9 @@ public class CustomAnalysisDialog extends JDialog {
 
     private static final long serialVersionUID = 1L;
 
+    private static final String PLACEHOLDER_TEXT =
+            "Enter specific instructions (e.g., 'Focus only on the set-cookie header')...";
+
     private JCheckBox chkIncludeRequest;
     private JCheckBox chkIncludeResponse;
     private JTextArea customPromptArea;
@@ -55,11 +58,31 @@ public class CustomAnalysisDialog extends JDialog {
         optionsPanel.add(chkIncludeRequest);
         optionsPanel.add(chkIncludeResponse);
 
-        customPromptArea =
-                new JTextArea(
-                        "Enter specific instructions (e.g., 'Focus only on the set-cookie header')...");
+        customPromptArea = new JTextArea(PLACEHOLDER_TEXT);
+        customPromptArea.setForeground(java.awt.Color.GRAY);
         customPromptArea.setLineWrap(true);
         customPromptArea.setWrapStyleWord(true);
+        // JTextArea has no built-in placeholder support, so the hint text above is real content
+        // until the user interacts with it -- clear it on focus and treat it as empty in
+        // getCustomPrompt() so it never gets sent to the LLM as if it were real instructions.
+        customPromptArea.addFocusListener(
+                new java.awt.event.FocusAdapter() {
+                    @Override
+                    public void focusGained(java.awt.event.FocusEvent e) {
+                        if (PLACEHOLDER_TEXT.equals(customPromptArea.getText())) {
+                            customPromptArea.setText("");
+                            customPromptArea.setForeground(java.awt.Color.BLACK);
+                        }
+                    }
+
+                    @Override
+                    public void focusLost(java.awt.event.FocusEvent e) {
+                        if (customPromptArea.getText().trim().isEmpty()) {
+                            customPromptArea.setText(PLACEHOLDER_TEXT);
+                            customPromptArea.setForeground(java.awt.Color.GRAY);
+                        }
+                    }
+                });
         JScrollPane scrollPane = new JScrollPane(customPromptArea);
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -97,6 +120,7 @@ public class CustomAnalysisDialog extends JDialog {
     }
 
     public String getCustomPrompt() {
-        return customPromptArea.getText();
+        String text = customPromptArea.getText();
+        return PLACEHOLDER_TEXT.equals(text) ? "" : text;
     }
 }

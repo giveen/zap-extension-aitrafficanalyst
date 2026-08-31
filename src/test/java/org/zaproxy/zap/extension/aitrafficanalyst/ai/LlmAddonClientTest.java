@@ -76,7 +76,30 @@ public class LlmAddonClientTest {
         assertEquals("analyze this request", comms.lastPrompt);
         // The cached communication service must be evicted after every call so its rolling
         // chat memory doesn't accumulate across unrelated analyses (see LlmAddonClient.chat).
-        assertEquals(List.of("aitrafficanalyst"), fake.removedCommsKeys);
+        assertEquals(1, fake.removedCommsKeys.size());
+        assertTrue(fake.removedCommsKeys.get(0).startsWith("aitrafficanalyst"));
+    }
+
+    @Test
+    void usesADistinctCommsKeyPerCall() throws Exception {
+        FakeCommsService comms = new FakeCommsService();
+        comms.responseToReturn = "ok";
+        FakeLlmExtension fake = new FakeLlmExtension();
+        fake.configured = true;
+        fake.commsService = comms;
+
+        ExtensionLoader loader = new ExtensionLoader(Model.getSingleton(), null);
+        loader.addExtension(fake);
+        Control.initSingletonForTesting(Model.getSingleton(), loader);
+
+        client.chat("first");
+        client.chat("second");
+
+        // Two concurrent analyses must never be handed the LLM add-on's same cached,
+        // memory-backed communication service, or one's prompt/response could leak into the
+        // other's rolling chat memory (see the COMMS_KEY_PREFIX comment in LlmAddonClient).
+        assertEquals(2, fake.requestedCommsKeys.size());
+        assertFalse(fake.requestedCommsKeys.get(0).equals(fake.requestedCommsKeys.get(1)));
     }
 
     /** Stands in for org.zaproxy.addon.llm.ExtensionLlm; matched by name via reflection. */
@@ -85,6 +108,7 @@ public class LlmAddonClientTest {
         String modelName = "";
         Object commsService;
         final List<String> removedCommsKeys = new ArrayList<>();
+        final List<String> requestedCommsKeys = new ArrayList<>();
 
         FakeLlmExtension() {
             super("ExtensionLlm");
@@ -103,6 +127,7 @@ public class LlmAddonClientTest {
         }
 
         public Object getCommunicationService(String commsKey, String outputTabName) {
+            requestedCommsKeys.add(commsKey);
             return commsService;
         }
 

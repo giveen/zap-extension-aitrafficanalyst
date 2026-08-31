@@ -21,6 +21,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Bump `commonlib` dependency to 1.40.0.
 
 ### Fixed
+- `LlmAddonClient.chat()` now uses a unique comms key per call instead of a shared constant, so
+  two analyses running concurrently (e.g. from different History rows) can no longer be handed
+  the LLM add-on's same cached, memory-backed communication service -- previously one analysis's
+  prompt/response could leak into another's rolling chat memory, or one's post-call eviction
+  could yank the service out from under a still-in-flight sibling call.
+- `CustomAnalysisDialog`'s instructions field no longer sends its own placeholder hint text to
+  the LLM as if it were real user instructions when left untouched; it now clears on focus and
+  `getCustomPrompt()` treats the unedited placeholder as empty.
+- `AnalystPanel.renderHtml` sanitized Markdown output with `Safelist.basic()`, which strips
+  `<h1>`-`<h6>` and `<hr>` entirely -- silently discarding both the "### Analysis for: <url>" /
+  "---" separators injected between history entries and any headings in the model's own output,
+  despite the panel's own CSS explicitly styling them. Now uses a safelist that additionally
+  permits those tags.
 - `LlmAddonClient.chat()` unwraps `InvocationTargetException` from the reflective call into the
   LLM add-on's `chat()` method, so a real failure (bad API key, network error, rate limit) shows
   its actual message on the Analyst panel instead of "Error: null".

@@ -74,6 +74,14 @@ public class AnalystPanel extends AbstractPanel {
     private static final Parser MARKDOWN_PARSER = Parser.builder().build();
     private static final HtmlRenderer HTML_RENDERER =
             HtmlRenderer.builder().softbreak("<br/>").escapeHtml(true).build();
+    // Safelist.basic() alone strips headings and <hr> entirely, silently discarding both the
+    // "### Analysis for: <url>" / "---" separators this panel injects between history entries
+    // (see updateAnalysis) and any headings the model's own Markdown output uses -- despite the
+    // CSS below explicitly styling h3 and hr for this exact content.
+    // Package-private (not private) so AnalystPanelSanitizationTest can exercise the actual
+    // sanitizer used in renderHtml, not a hand-copied stand-in that could silently drift from it.
+    static final Safelist ANALYSIS_SAFELIST =
+            Safelist.basic().addTags("h1", "h2", "h3", "h4", "h5", "h6", "hr");
     private static final int MAX_HISTORY_CHARS = 2 * 1024 * 1024; // 2 MB
     private static final int KEEP_HISTORY_CHARS =
             MAX_HISTORY_CHARS / 2; // keep newest 1MB when trimming
@@ -616,7 +624,7 @@ public class AnalystPanel extends AbstractPanel {
         String htmlContent = HTML_RENDERER.render(document);
 
         // Sanitize HTML using a permissive but safe whitelist (no scripts/styles)
-        String cleanHtml = Jsoup.clean(htmlContent, Safelist.basic());
+        String cleanHtml = Jsoup.clean(htmlContent, ANALYSIS_SAFELIST);
 
         String finalHtml = "<html><body>" + cleanHtml + "</body></html>";
 

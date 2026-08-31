@@ -21,6 +21,7 @@ package org.zaproxy.zap.extension.aitrafficanalyst.ai;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
+import java.util.UUID;
 import org.parosproxy.paros.Constant;
 import org.parosproxy.paros.control.Control;
 import org.parosproxy.paros.extension.Extension;
@@ -36,7 +37,11 @@ public class LlmAddonClient implements AnalystLlmClient {
 
     private static final String EXTENSION_LLM_NAME = "ExtensionLlm";
     private static final String EXTENSION_LLM_CLASSNAME_SUFFIX = ".ExtensionLlm";
-    private static final String COMMS_KEY = "aitrafficanalyst";
+    // Prefixes a per-call unique key (see chat()) rather than being used directly, so that
+    // concurrent analyses never share the LLM add-on's cached, memory-backed communication
+    // service -- otherwise two analyses running at once would read/write the same rolling chat
+    // memory and could evict each other's service mid-flight.
+    private static final String COMMS_KEY_PREFIX = "aitrafficanalyst";
     private static final String OUTPUT_TAB_NAME = "AI Traffic Analyst";
 
     private volatile Extension extensionLlm;
@@ -193,10 +198,14 @@ public class LlmAddonClient implements AnalystLlmClient {
                     Constant.messages.getString("aitrafficanalyst.llm.missing.detailed"));
         }
 
+        // Unique per call: see the COMMS_KEY_PREFIX comment for why this can't be a shared
+        // constant.
+        String commsKey = COMMS_KEY_PREFIX + "-" + UUID.randomUUID();
+
         Object comms =
                 ext.getClass()
                         .getMethod("getCommunicationService", String.class, String.class)
-                        .invoke(ext, COMMS_KEY, OUTPUT_TAB_NAME);
+                        .invoke(ext, commsKey, OUTPUT_TAB_NAME);
 
         if (comms == null) {
             String issue = getCommsIssue();
@@ -230,15 +239,15 @@ public class LlmAddonClient implements AnalystLlmClient {
             // token cost and leaking one page's traffic content into another page's analysis.
             // This only drops our cached service reference; any visible chat tab in the LLM
             // add-on's UI is left in place for transparency.
-            evictCommsService(ext);
+            evictCommsService(ext, commsKey);
         }
     }
 
-    private void evictCommsService(Extension ext) {
+    private void evictCommsService(Extension ext, String commsKey) {
         try {
             ext.getClass()
                     .getMethod("removeCommunicationService", String.class)
-                    .invoke(ext, COMMS_KEY);
+                    .invoke(ext, commsKey);
         } catch (Exception ignored) {
             // Best-effort cleanup; if unavailable the next call simply reuses the accumulated
             // memory, which is a cost/robustness concern but not a functional failure.
