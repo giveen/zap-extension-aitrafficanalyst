@@ -32,9 +32,9 @@ import org.parosproxy.paros.extension.ExtensionLoader;
 import org.parosproxy.paros.model.Model;
 
 /**
- * LlmAddonClient talks to the real ZAP LLM add-on purely via reflection (no compile-time
- * dependency exists for it), so it can be exercised here with a plain test double registered
- * under an {@code ExtensionLoader} obtained via {@link Control#initSingletonForTesting}.
+ * LlmAddonClient talks to the real ZAP LLM add-on purely via reflection (no compile-time dependency
+ * exists for it), so it can be exercised here with a plain test double registered under an {@code
+ * ExtensionLoader} obtained via {@link Control#initSingletonForTesting}.
  *
  * <p>Note: ZAP 2.15.0 (our declared minimum) exposes {@code initSingletonForTesting} but not the
  * later-added {@code setSingletonForTesting}, so there's no supported way to reset the {@code

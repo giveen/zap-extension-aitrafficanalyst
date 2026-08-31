@@ -1,7 +1,25 @@
+/*
+ * Zed Attack Proxy (ZAP) and its related class files.
+ *
+ * ZAP is an HTTP/HTTPS proxy for assessing web application security.
+ *
+ * Copyright 2026 The ZAP Development Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.zaproxy.zap.extension.aitrafficanalyst;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import java.text.MessageFormat;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -10,9 +28,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
-import java.text.MessageFormat;
 import javax.swing.ImageIcon;
 import javax.swing.SwingUtilities;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.parosproxy.paros.Constant;
 import org.parosproxy.paros.extension.ExtensionAdaptor;
 import org.parosproxy.paros.extension.ExtensionHook;
@@ -60,15 +79,17 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
         // Register our options class with ZAP's configuration system
         this.options = new AnalystOptions();
         // Create a daemon cached thread pool for background tasks
-        this.executor = Executors.newCachedThreadPool(new ThreadFactory() {
-            @Override
-            public Thread newThread(Runnable r) {
-                Thread t = new Thread(r);
-                t.setDaemon(true);
-                t.setName("AiAnalyst-worker-" + System.nanoTime());
-                return t;
-            }
-        });
+        this.executor =
+                Executors.newCachedThreadPool(
+                        new ThreadFactory() {
+                            @Override
+                            public Thread newThread(Runnable r) {
+                                Thread t = new Thread(r);
+                                t.setDaemon(true);
+                                t.setName("AiAnalyst-worker-" + System.nanoTime());
+                                return t;
+                            }
+                        });
         // Phase 1: Use the official ZAP LLM add-on via an adapter.
         this.llmClient = new LlmAddonClient();
     }
@@ -77,7 +98,7 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
     public void hook(ExtensionHook extensionHook) {
         super.hook(extensionHook);
         LOGGER.info("AI Traffic Analyst: Extension Hook Registered.");
-        
+
         // Add options to configuration
         extensionHook.addOptionsParamSet(this.options);
 
@@ -86,44 +107,57 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
             this.analystPanel = new AnalystPanel(this);
             this.analystPanel.init();
             try {
-                ImageIcon icon = new ImageIcon(getClass().getResource("/org/zaproxy/zap/extension/aitrafficanalyst/resources/robot.png"));
+                ImageIcon icon =
+                        new ImageIcon(
+                                getClass()
+                                        .getResource(
+                                                "/org/zaproxy/zap/extension/aitrafficanalyst/resources/robot.png"));
                 this.analystPanel.setIcon(icon);
             } catch (RuntimeException e) {
                 LOGGER.debug("Analyst icon failed to load (runtime issue)", e);
             }
             extensionHook.getHookView().addStatusPanel(this.analystPanel);
-            
+
             // Register Options Panel
             AnalystOptionsPanel optionsPanel = new AnalystOptionsPanel(this);
             optionsPanel.init();
             extensionHook.getHookView().addOptionPanel(optionsPanel);
 
             // Register popup menu items.
-            // The submenu structure is created by ZAP itself when menu items return isSubMenu() == true
+            // The submenu structure is created by ZAP itself when menu items return isSubMenu() ==
+            // true
             // and provide a parent menu name.
-            extensionHook.getHookMenu().addPopupMenuItem(
-                new AnalystPopupMenu(
-                    Constant.messages.getString("aitrafficanalyst.menu.analyzeGet"),
-                    this,
-                    "GET"));
-            extensionHook.getHookMenu().addPopupMenuItem(
-                new AnalystPopupMenu(
-                    Constant.messages.getString("aitrafficanalyst.menu.analyzePost"),
-                    this,
-                    "POST"));
+            extensionHook
+                    .getHookMenu()
+                    .addPopupMenuItem(
+                            new AnalystPopupMenu(
+                                    Constant.messages.getString("aitrafficanalyst.menu.analyzeGet"),
+                                    this,
+                                    "GET"));
+            extensionHook
+                    .getHookMenu()
+                    .addPopupMenuItem(
+                            new AnalystPopupMenu(
+                                    Constant.messages.getString(
+                                            "aitrafficanalyst.menu.analyzePost"),
+                                    this,
+                                    "POST"));
 
-            extensionHook.getHookMenu().addPopupMenuItem(
-                new AnalystPopupMenu(
-                    Constant.messages.getString("aitrafficanalyst.menu.customAnalysis"),
-                    this,
-                    "CUSTOM"));
+            extensionHook
+                    .getHookMenu()
+                    .addPopupMenuItem(
+                            new AnalystPopupMenu(
+                                    Constant.messages.getString(
+                                            "aitrafficanalyst.menu.customAnalysis"),
+                                    this,
+                                    "CUSTOM"));
         }
     }
-    
+
     public AnalystOptions getOptions() {
         return this.options;
     }
-    
+
     public AnalystPanel getAnalystPanel() {
         return this.analystPanel;
     }
@@ -143,7 +177,8 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
         }
         String issue = client.getCommsIssue();
         if (issue != null && !issue.trim().isEmpty()) {
-            String tmpl = Constant.messages.getString("aitrafficanalyst.llm.notConfiguredWithIssue");
+            String tmpl =
+                    Constant.messages.getString("aitrafficanalyst.llm.notConfiguredWithIssue");
             return MessageFormat.format(tmpl, issue);
         }
         return Constant.messages.getString("aitrafficanalyst.llm.notConfigured");
@@ -160,8 +195,8 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
     }
 
     /**
-     * Adds a brief summary of a finding to the session memory.
-     * Keeps the list size fixed at MAX_CONTEXT_SIZE.
+     * Adds a brief summary of a finding to the session memory. Keeps the list size fixed at
+     * MAX_CONTEXT_SIZE.
      */
     public void addSessionInsight(String url, String findingSummary) {
         if (url == null || findingSummary == null) {
@@ -207,8 +242,8 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
     }
 
     /**
-     * Truncates {@code combinedPrompt} to {@link #MAX_PROMPT_CHARS}, keeping a head and tail
-     * slice, and warns the panel if truncation occurred.
+     * Truncates {@code combinedPrompt} to {@link #MAX_PROMPT_CHARS}, keeping a head and tail slice,
+     * and warns the panel if truncation occurred.
      */
     private String truncateForPromptLimit(String url, String combinedPrompt) {
         if (combinedPrompt.length() <= MAX_PROMPT_CHARS) {
@@ -238,9 +273,9 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
     }
 
     /**
-     * Runs an analysis on the background executor: checks the LLM add-on is configured, performs
-     * a live request/response, builds the final prompt from {@code promptBodyBuilder}, sends it
-     * to the LLM add-on, and reports the outcome to the Analyst panel. Shared by {@link
+     * Runs an analysis on the background executor: checks the LLM add-on is configured, performs a
+     * live request/response, builds the final prompt from {@code promptBodyBuilder}, sends it to
+     * the LLM add-on, and reports the outcome to the Analyst panel. Shared by {@link
      * #analyzeRequest(HttpMessage, String)} and {@link #analyzeRequestCustom(HttpMessage, String,
      * boolean, boolean)}, which differ only in how the prompt body is built.
      */
@@ -259,7 +294,8 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
                         }
 
                         updatePanelAsync(
-                                url, Constant.messages.getString("aitrafficanalyst.status.sending"));
+                                url,
+                                Constant.messages.getString("aitrafficanalyst.status.sending"));
 
                         // Perform a live request to capture a fresh response.
                         HttpSender sender = new HttpSender(HttpSender.MANUAL_REQUEST_INITIATOR);
@@ -269,7 +305,8 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
                         updatePanelAsync(
                                 url,
                                 MessageFormat.format(
-                                        Constant.messages.getString("aitrafficanalyst.status.querying"),
+                                        Constant.messages.getString(
+                                                "aitrafficanalyst.status.querying"),
                                         displayModelName()));
 
                         String promptBody = promptBodyBuilder.apply(liveMsg);
@@ -298,10 +335,7 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
     }
 
     public void analyzeRequestCustom(
-            HttpMessage msg,
-            String customInstructions,
-            boolean includeReq,
-            boolean includeRes) {
+            HttpMessage msg, String customInstructions, boolean includeReq, boolean includeRes) {
         if (msg == null || getView() == null) {
             return;
         }
@@ -329,12 +363,14 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
                     prompt.append("--- SESSION CONTEXT (Previous findings in this session) ---\n")
                             .append(getSessionContextFormatted())
                             .append("\n")
-                            .append("-----------------------------------------------------------\n\n");
+                            .append(
+                                    "-----------------------------------------------------------\n\n");
 
                     if (rolePrompt != null && !rolePrompt.trim().isEmpty()) {
                         prompt.append(rolePrompt.trim()).append("\n\n");
                     } else {
-                        prompt.append("You are a Security Analyst assisting with a specific task.\n\n");
+                        prompt.append(
+                                "You are a Security Analyst assisting with a specific task.\n\n");
                     }
 
                     String instr = customInstructions == null ? "" : customInstructions.trim();
@@ -349,7 +385,8 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
                     if (includeReq) {
                         prompt.append("--- HTTP REQUEST ---\n");
                         prompt.append(liveMsg.getRequestHeader().toString()).append("\n");
-                        if (liveMsg.getRequestBody() != null && liveMsg.getRequestBody().length() > 0) {
+                        if (liveMsg.getRequestBody() != null
+                                && liveMsg.getRequestBody().length() > 0) {
                             prompt.append(liveMsg.getRequestBody().toString()).append("\n");
                         }
                         prompt.append("\n");
@@ -358,7 +395,8 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
                     if (includeRes) {
                         prompt.append("--- HTTP RESPONSE ---\n");
                         prompt.append(liveMsg.getResponseHeader().toString()).append("\n");
-                        if (liveMsg.getResponseBody() != null && liveMsg.getResponseBody().length() > 0) {
+                        if (liveMsg.getResponseBody() != null
+                                && liveMsg.getResponseBody().length() > 0) {
                             String body = liveMsg.getResponseBody().toString();
                             if (body.length() > 5000) {
                                 body = body.substring(0, 5000) + "... [TRUNCATED]";
@@ -374,9 +412,9 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
     }
 
     /**
-     * Runs the standard GET/POST analysis pipeline for a message selected from the history or
-     * site tree. Performs a live request, builds the prompt using the active role persona and
-     * session context, and displays the LLM result in the Analyst panel.
+     * Runs the standard GET/POST analysis pipeline for a message selected from the history or site
+     * tree. Performs a live request, builds the prompt using the active role persona and session
+     * context, and displays the LLM result in the Analyst panel.
      *
      * <p>All network and LLM I/O runs on the background executor; all panel updates are dispatched
      * on the EDT.
@@ -419,14 +457,15 @@ public class ExtensionAiAnalyst extends ExtensionAdaptor {
                         String previousContext = getSessionContextFormatted();
                         StringBuilder sp = new StringBuilder();
                         sp.append("You are an OWASP security expert.\n")
-                                .append("--- SESSION CONTEXT (Previous findings in this session) ---\n")
+                                .append(
+                                        "--- SESSION CONTEXT (Previous findings in this session) ---\n")
                                 .append(previousContext)
-                                .append("\n-----------------------------------------------------------\n");
+                                .append(
+                                        "\n-----------------------------------------------------------\n");
                         if (basePrompt != null && !basePrompt.trim().isEmpty()) {
                             sp.append(basePrompt.trim()).append("\n");
                         } else {
-                            sp.append(
-                                            "Analyze the following HTTP request for vulnerabilities...")
+                            sp.append("Analyze the following HTTP request for vulnerabilities...")
                                     .append("\n");
                         }
                         systemPrompt = sp.toString();

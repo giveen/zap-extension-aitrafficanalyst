@@ -1,50 +1,68 @@
+/*
+ * Zed Attack Proxy (ZAP) and its related class files.
+ *
+ * ZAP is an HTTP/HTTPS proxy for assessing web application security.
+ *
+ * Copyright 2026 The ZAP Development Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.zaproxy.zap.extension.aitrafficanalyst.ui;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.Font;
-import java.awt.Image;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Image;
 import java.awt.Insets;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.FileWriter;
+import java.text.MessageFormat;
+import java.util.Map;
 import javax.imageio.ImageIO;
-import java.awt.Color;
-import javax.swing.UIManager;
 import javax.swing.ImageIcon;
+import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
-import javax.swing.JScrollPane;
-import org.apache.logging.log4j.LogManager;
+import javax.swing.JEditorPane;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
-import java.io.File;
-import java.io.FileWriter;
-import java.text.MessageFormat;
-import javax.swing.JButton;
 import javax.swing.JToolBar;
-import javax.swing.JEditorPane;
+import javax.swing.UIManager;
 import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.StyleSheet;
-import java.util.Map;
-import org.parosproxy.paros.control.Control;
-import org.parosproxy.paros.core.scanner.Alert;
-import org.parosproxy.paros.extension.AbstractPanel;
-import org.parosproxy.paros.model.HistoryReference;
-import org.parosproxy.paros.network.HttpMessage;
+import org.apache.logging.log4j.LogManager;
 import org.commonmark.node.Node;
 import org.commonmark.parser.Parser;
 import org.commonmark.renderer.html.HtmlRenderer;
 import org.jsoup.Jsoup;
 import org.jsoup.safety.Safelist;
-import org.zaproxy.zap.extension.alert.ExtensionAlert;
+import org.parosproxy.paros.control.Control;
+import org.parosproxy.paros.core.scanner.Alert;
+import org.parosproxy.paros.extension.AbstractPanel;
+import org.parosproxy.paros.model.HistoryReference;
+import org.parosproxy.paros.network.HttpMessage;
 import org.zaproxy.zap.extension.aitrafficanalyst.ExtensionAiAnalyst;
+import org.zaproxy.zap.extension.alert.ExtensionAlert;
 
 public class AnalystPanel extends AbstractPanel {
 
@@ -53,13 +71,12 @@ public class AnalystPanel extends AbstractPanel {
     private transient ExtensionAiAnalyst extension;
     private JEditorPane resultArea;
     private StringBuilder fullHistoryMarkdown = new StringBuilder();
-        private static final Parser MARKDOWN_PARSER = Parser.builder().build();
-        private static final HtmlRenderer HTML_RENDERER = HtmlRenderer.builder()
-            .softbreak("<br/>")
-            .escapeHtml(true)
-            .build();
+    private static final Parser MARKDOWN_PARSER = Parser.builder().build();
+    private static final HtmlRenderer HTML_RENDERER =
+            HtmlRenderer.builder().softbreak("<br/>").escapeHtml(true).build();
     private static final int MAX_HISTORY_CHARS = 2 * 1024 * 1024; // 2 MB
-    private static final int KEEP_HISTORY_CHARS = MAX_HISTORY_CHARS / 2; // keep newest 1MB when trimming
+    private static final int KEEP_HISTORY_CHARS =
+            MAX_HISTORY_CHARS / 2; // keep newest 1MB when trimming
 
     private static final int MAX_ALERT_DESCRIPTION_CHARS = 20 * 1024;
     private static final int MAX_ALERT_OTHERINFO_CHARS = 60 * 1024;
@@ -83,32 +100,43 @@ public class AnalystPanel extends AbstractPanel {
 
     public void init() {
         this.setLayout(new BorderLayout());
-        this.setName(org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.panel.name")); // This is the tab name
+        this.setName(
+                org.parosproxy.paros.Constant.messages.getString(
+                        "aitrafficanalyst.panel.name")); // This is the tab name
 
         // Try to load bundled icon from resources and scale it down to a fixed 16x16 BufferedImage
         try {
-            java.net.URL iconURL = getClass().getResource("/org/zaproxy/zap/extension/aitrafficanalyst/resources/ai-analysis.png");
+            java.net.URL iconURL =
+                    getClass()
+                            .getResource(
+                                    "/org/zaproxy/zap/extension/aitrafficanalyst/resources/ai-analysis.png");
             if (iconURL != null) {
                 BufferedImage originalImg = null;
                 try {
                     originalImg = ImageIO.read(iconURL);
                 } catch (Exception readEx) {
-                    LogManager.getLogger(AnalystPanel.class).warn("ImageIO.read failed, will fallback to ImageIcon", readEx);
+                    LogManager.getLogger(AnalystPanel.class)
+                            .warn("ImageIO.read failed, will fallback to ImageIcon", readEx);
                 }
 
                 if (originalImg == null) {
                     // Fallback to ImageIcon which may handle different image types
                     try {
                         ImageIcon fallback = new ImageIcon(iconURL);
-                        Image scaled = fallback.getImage().getScaledInstance(16, 16, Image.SCALE_SMOOTH);
-                        BufferedImage finalImg = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+                        Image scaled =
+                                fallback.getImage().getScaledInstance(16, 16, Image.SCALE_SMOOTH);
+                        BufferedImage finalImg =
+                                new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
                         Graphics2D g2Fallback = finalImg.createGraphics();
-                        g2Fallback.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                        g2Fallback.setRenderingHint(
+                                RenderingHints.KEY_INTERPOLATION,
+                                RenderingHints.VALUE_INTERPOLATION_BILINEAR);
                         g2Fallback.drawImage(scaled, 0, 0, null);
                         g2Fallback.dispose();
                         this.setIcon(new ImageIcon(finalImg));
                     } catch (Exception fbEx) {
-                        LogManager.getLogger(AnalystPanel.class).error("Failed to create fallback icon", fbEx);
+                        LogManager.getLogger(AnalystPanel.class)
+                                .error("Failed to create fallback icon", fbEx);
                     }
                 } else {
                     // Prepare final canvas with alpha channel
@@ -121,9 +149,13 @@ public class AnalystPanel extends AbstractPanel {
                     boolean isDarkTheme = brightness < 128;
 
                     // Use high-quality interpolation
-                    g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-                    g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setRenderingHint(
+                            RenderingHints.KEY_INTERPOLATION,
+                            RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+                    g2.setRenderingHint(
+                            RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+                    g2.setRenderingHint(
+                            RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
                     // If dark theme, draw a subtle light glow behind the icon for contrast
                     if (isDarkTheme) {
@@ -139,10 +171,12 @@ public class AnalystPanel extends AbstractPanel {
                 }
             } else {
                 LogManager.getLogger(AnalystPanel.class)
-                    .error("AI Analysis Icon NOT FOUND at: /org/zaproxy/zap/extension/aitrafficanalyst/resources/ai-analysis.png");
+                        .error(
+                                "AI Analysis Icon NOT FOUND at: /org/zaproxy/zap/extension/aitrafficanalyst/resources/ai-analysis.png");
             }
         } catch (RuntimeException e) {
-            LogManager.getLogger(AnalystPanel.class).error("Unexpected error while loading icon", e);
+            LogManager.getLogger(AnalystPanel.class)
+                    .error("Unexpected error while loading icon", e);
         }
 
         // Toolbar with actions
@@ -176,25 +210,29 @@ public class AnalystPanel extends AbstractPanel {
         toolBar.add(roleSelector);
         toolBar.addSeparator();
 
-        JButton btnClear = new JButton(org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.btn.clear"));
+        JButton btnClear =
+                new JButton(
+                        org.parosproxy.paros.Constant.messages.getString(
+                                "aitrafficanalyst.btn.clear"));
         btnClear.addActionListener(e -> clearAnalysis());
         toolBar.add(btnClear);
 
         JButton btnClearMemory = new JButton("Clear Memory");
         btnClearMemory.setToolTipText("Wipe the AI's session context buffer (last 5 findings).");
         btnClearMemory.setEnabled(this.extension != null);
-        btnClearMemory.addActionListener(e -> {
-            if (this.extension == null) {
-                return;
-            }
+        btnClearMemory.addActionListener(
+                e -> {
+                    if (this.extension == null) {
+                        return;
+                    }
 
-            this.extension.clearSessionContext();
-            JOptionPane.showMessageDialog(
-                this,
-                "Session memory cleared!",
-                "AI Analyst",
-                JOptionPane.INFORMATION_MESSAGE);
-        });
+                    this.extension.clearSessionContext();
+                    JOptionPane.showMessageDialog(
+                            this,
+                            "Session memory cleared!",
+                            "AI Analyst",
+                            JOptionPane.INFORMATION_MESSAGE);
+                });
         toolBar.add(btnClearMemory);
 
         JButton btnSaveAlert = new JButton("Save as Alert");
@@ -202,7 +240,10 @@ public class AnalystPanel extends AbstractPanel {
         btnSaveAlert.addActionListener(e -> showSaveAlertDialog());
         toolBar.add(btnSaveAlert);
 
-        JButton btnSave = new JButton(org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.btn.save"));
+        JButton btnSave =
+                new JButton(
+                        org.parosproxy.paros.Constant.messages.getString(
+                                "aitrafficanalyst.btn.save"));
         btnSave.addActionListener(e -> saveReport());
         toolBar.add(btnSave);
         this.add(toolBar, BorderLayout.NORTH);
@@ -218,12 +259,16 @@ public class AnalystPanel extends AbstractPanel {
         StyleSheet styleSheet = new StyleSheet();
         styleSheet.addStyleSheet(kit.getStyleSheet());
         styleSheet.addRule("body { font-family: sans-serif; padding: 15px; line-height: 1.5; }");
-        styleSheet.addRule("h3 { color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 20px; }");
-        styleSheet.addRule("code { background-color: #f8f9fa; padding: 2px 4px; border-radius: 4px; color: #e83e8c; font-family: monospace; }");
         styleSheet.addRule(
-            "pre { background-color: #f0f0f0; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; }");
-        styleSheet.addRule("pre code { background-color: transparent; padding: 0; color: inherit; }");
-        styleSheet.addRule("blockquote { border-left: 5px solid #dfe2e5; color: #6a737d; padding-left: 1em; margin-left: 0; font-style: italic; }");
+                "h3 { color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 20px; }");
+        styleSheet.addRule(
+                "code { background-color: #f8f9fa; padding: 2px 4px; border-radius: 4px; color: #e83e8c; font-family: monospace; }");
+        styleSheet.addRule(
+                "pre { background-color: #f0f0f0; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; }");
+        styleSheet.addRule(
+                "pre code { background-color: transparent; padding: 0; color: inherit; }");
+        styleSheet.addRule(
+                "blockquote { border-left: 5px solid #dfe2e5; color: #6a737d; padding-left: 1em; margin-left: 0; font-style: italic; }");
         styleSheet.addRule("hr { border: 0; border-top: 2px solid #eee; margin: 20px 0; }");
         kit.setStyleSheet(styleSheet);
         resultArea.setEditorKit(kit);
@@ -246,24 +291,36 @@ public class AnalystPanel extends AbstractPanel {
             File file = chooser.getSelectedFile();
             try (FileWriter writer = new FileWriter(file)) {
                 writer.write(fullHistoryMarkdown.toString());
-                String msgT = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.report.saved");
-                String title = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.report.saved.title");
+                String msgT =
+                        org.parosproxy.paros.Constant.messages.getString(
+                                "aitrafficanalyst.report.saved");
+                String title =
+                        org.parosproxy.paros.Constant.messages.getString(
+                                "aitrafficanalyst.report.saved.title");
                 JOptionPane.showMessageDialog(
                         this,
                         MessageFormat.format(msgT, file.getAbsolutePath()),
                         title,
                         JOptionPane.INFORMATION_MESSAGE);
             } catch (java.io.IOException ex) {
-                String msgT = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.report.saveError");
-                String title = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.report.saveError.title");
+                String msgT =
+                        org.parosproxy.paros.Constant.messages.getString(
+                                "aitrafficanalyst.report.saveError");
+                String title =
+                        org.parosproxy.paros.Constant.messages.getString(
+                                "aitrafficanalyst.report.saveError.title");
                 JOptionPane.showMessageDialog(
                         this,
                         MessageFormat.format(msgT, ex.getMessage()),
                         title,
                         JOptionPane.ERROR_MESSAGE);
             } catch (RuntimeException ex) {
-                String msgT = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.report.saveError");
-                String title = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.report.saveError.title");
+                String msgT =
+                        org.parosproxy.paros.Constant.messages.getString(
+                                "aitrafficanalyst.report.saveError");
+                String title =
+                        org.parosproxy.paros.Constant.messages.getString(
+                                "aitrafficanalyst.report.saveError.title");
                 JOptionPane.showMessageDialog(
                         this,
                         MessageFormat.format(msgT, ex.getMessage()),
@@ -272,12 +329,16 @@ public class AnalystPanel extends AbstractPanel {
             }
         }
     }
+
     public void updateAnalysis(String url, String markdownText) {
         // 1. Transient status updates ("Thinking...", "Sending live request...") are shown
         // without being appended to the permanent history -- only the final result or an error
         // should end up in the saved report.
-        String thinkingKey = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.status.thinking");
-        String sendingKey = org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.status.sending");
+        String thinkingKey =
+                org.parosproxy.paros.Constant.messages.getString(
+                        "aitrafficanalyst.status.thinking");
+        String sendingKey =
+                org.parosproxy.paros.Constant.messages.getString("aitrafficanalyst.status.sending");
         if (markdownText != null
                 && (markdownText.contains(thinkingKey) || markdownText.contains(sendingKey))) {
             String temp = fullHistoryMarkdown.toString() + "\n\n*STATUS: " + markdownText + "*";
@@ -290,7 +351,10 @@ public class AnalystPanel extends AbstractPanel {
         lastAnalysisText = text;
         // Avoid duplicating headers if the model already included an analysis header
         String trimmed = text.trim();
-        boolean hasHeader = trimmed.startsWith("### Analysis for:") || trimmed.startsWith("Analysis for:") || trimmed.contains("Analysis for: " + url);
+        boolean hasHeader =
+                trimmed.startsWith("### Analysis for:")
+                        || trimmed.startsWith("Analysis for:")
+                        || trimmed.contains("Analysis for: " + url);
         if (!hasHeader) {
             fullHistoryMarkdown.append("\n\n---\n### Analysis for: ").append(url).append("\n\n");
         }
@@ -299,7 +363,9 @@ public class AnalystPanel extends AbstractPanel {
         // 2.a Prune history if it grows beyond MAX_HISTORY_CHARS
         if (fullHistoryMarkdown.length() > MAX_HISTORY_CHARS) {
             // Keep only the newest KEEP_HISTORY_CHARS characters and insert a truncation marker
-            String tail = fullHistoryMarkdown.substring(fullHistoryMarkdown.length() - KEEP_HISTORY_CHARS);
+            String tail =
+                    fullHistoryMarkdown.substring(
+                            fullHistoryMarkdown.length() - KEEP_HISTORY_CHARS);
             fullHistoryMarkdown.setLength(0);
             fullHistoryMarkdown.append("\n\n[... previous history truncated due to size ...]\n");
             fullHistoryMarkdown.append(tail);
@@ -340,13 +406,7 @@ public class AnalystPanel extends AbstractPanel {
 
         JComboBox<String> confidenceBox =
                 new JComboBox<>(
-                        new String[] {
-                            "High",
-                            "Medium",
-                            "Low",
-                            "False Positive",
-                            "User Confirmed"
-                        });
+                        new String[] {"High", "Medium", "Low", "False Positive", "User Confirmed"});
         confidenceBox.setSelectedItem("Medium");
 
         JCheckBox includeFullBox = new JCheckBox("Prefill with full AI output (may be large)");
@@ -361,21 +421,25 @@ public class AnalystPanel extends AbstractPanel {
         descriptionScroll.setPreferredSize(new Dimension(520, 180));
 
         JLabel sizeLabel =
-            new JLabel(
-                "AI text length: "
-                    + descriptionDefault.length()
-                    + " chars (default prefill is truncated)");
+                new JLabel(
+                        "AI text length: "
+                                + descriptionDefault.length()
+                                + " chars (default prefill is truncated)");
 
         includeFullBox.addActionListener(
-            e -> {
-                if (includeFullBox.isSelected()) {
-                descriptionArea.setText(
-                    truncate(descriptionDefault, MAX_ALERT_OTHERINFO_CHARS, TRUNCATED_NOTICE));
-                } else {
-                descriptionArea.setText(truncate(descriptionDefault, 12 * 1024, TRUNCATED_NOTICE));
-                }
-                descriptionArea.setCaretPosition(0);
-            });
+                e -> {
+                    if (includeFullBox.isSelected()) {
+                        descriptionArea.setText(
+                                truncate(
+                                        descriptionDefault,
+                                        MAX_ALERT_OTHERINFO_CHARS,
+                                        TRUNCATED_NOTICE));
+                    } else {
+                        descriptionArea.setText(
+                                truncate(descriptionDefault, 12 * 1024, TRUNCATED_NOTICE));
+                    }
+                    descriptionArea.setCaretPosition(0);
+                });
 
         JPanel panel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
@@ -444,7 +508,8 @@ public class AnalystPanel extends AbstractPanel {
         }
     }
 
-    private void saveAlert(String title, String riskLabel, String confidenceLabel, String description) {
+    private void saveAlert(
+            String title, String riskLabel, String confidenceLabel, String description) {
         try {
             int risk = Alert.RISK_INFO;
             if ("High".equalsIgnoreCase(riskLabel)) {
@@ -466,7 +531,8 @@ public class AnalystPanel extends AbstractPanel {
                 confidence = Alert.CONFIDENCE_USER_CONFIRMED;
             }
 
-            String alertName = title != null && !title.trim().isEmpty() ? title.trim() : "AI Analyst Finding";
+            String alertName =
+                    title != null && !title.trim().isEmpty() ? title.trim() : "AI Analyst Finding";
 
             Alert alert = new Alert(90001, risk, confidence, alertName);
             alert.setSource(Alert.Source.MANUAL);
@@ -474,25 +540,28 @@ public class AnalystPanel extends AbstractPanel {
             String uri = lastMessage.getRequestHeader().getURI().toString();
             alert.setUri(uri);
 
-                String descRaw = description != null ? description : "";
-                String desc = truncate(descRaw, MAX_ALERT_DESCRIPTION_CHARS, TRUNCATED_NOTICE);
+            String descRaw = description != null ? description : "";
+            String desc = truncate(descRaw, MAX_ALERT_DESCRIPTION_CHARS, TRUNCATED_NOTICE);
 
-                String otherInfo = "Generated by AI Traffic Analyst.";
-                if (descRaw.length() > MAX_ALERT_DESCRIPTION_CHARS && lastAnalysisText != null) {
+            String otherInfo = "Generated by AI Traffic Analyst.";
+            if (descRaw.length() > MAX_ALERT_DESCRIPTION_CHARS && lastAnalysisText != null) {
                 otherInfo =
-                    otherInfo
-                        + "\n\nOriginal AI output (truncated for storage):\n"
-                        + truncate(lastAnalysisText, MAX_ALERT_OTHERINFO_CHARS, TRUNCATED_NOTICE);
-                }
-                String evidence = "AI-generated analysis. Validate with manual testing.";
+                        otherInfo
+                                + "\n\nOriginal AI output (truncated for storage):\n"
+                                + truncate(
+                                        lastAnalysisText,
+                                        MAX_ALERT_OTHERINFO_CHARS,
+                                        TRUNCATED_NOTICE);
+            }
+            String evidence = "AI-generated analysis. Validate with manual testing.";
 
-                alert.setDescription(desc);
-                alert.setOtherInfo(otherInfo);
-                alert.setEvidence(evidence);
+            alert.setDescription(desc);
+            alert.setOtherInfo(otherInfo);
+            alert.setEvidence(evidence);
             alert.setCweId(0);
             alert.setWascId(0);
             alert.setMessage(lastMessage);
-                alert.setDetail(desc, uri, "", "", otherInfo, "", "", evidence, 0, 0, lastMessage);
+            alert.setDetail(desc, uri, "", "", otherInfo, "", "", evidence, 0, 0, lastMessage);
 
             HistoryReference href = lastMessage.getHistoryRef();
             if (href == null) {
@@ -551,10 +620,11 @@ public class AnalystPanel extends AbstractPanel {
 
         String finalHtml = "<html><body>" + cleanHtml + "</body></html>";
 
-        javax.swing.SwingUtilities.invokeLater(() -> {
-            resultArea.setText(finalHtml);
-            resultArea.setCaretPosition(0);
-        });
+        javax.swing.SwingUtilities.invokeLater(
+                () -> {
+                    resultArea.setText(finalHtml);
+                    resultArea.setCaretPosition(0);
+                });
     }
 
     public void setTabFocus() {
@@ -565,24 +635,29 @@ public class AnalystPanel extends AbstractPanel {
     }
 
     /**
-     * Builds a session-aware system prompt by injecting recent findings from the current ZAP session.
+     * Builds a session-aware system prompt by injecting recent findings from the current ZAP
+     * session.
      *
      * <p>This is intentionally UI-adjacent (panel-owned) so the panel can participate in prompt
      * assembly while keeping the session memory stored in the extension.
      */
     public String buildSessionAwareSystemPrompt(ExtensionAiAnalyst extension, String basePrompt) {
-        String previousContext = extension != null ? extension.getSessionContextFormatted() : "None.";
+        String previousContext =
+                extension != null ? extension.getSessionContextFormatted() : "None.";
         StringBuilder systemPrompt = new StringBuilder();
-        systemPrompt.append("You are an OWASP security expert.\n")
-            .append("--- SESSION CONTEXT (Previous findings in this session) ---\n")
-            .append(previousContext)
-            .append("\n")
-            .append("-----------------------------------------------------------\n");
+        systemPrompt
+                .append("You are an OWASP security expert.\n")
+                .append("--- SESSION CONTEXT (Previous findings in this session) ---\n")
+                .append(previousContext)
+                .append("\n")
+                .append("-----------------------------------------------------------\n");
 
         if (basePrompt != null && !basePrompt.trim().isEmpty()) {
             systemPrompt.append(basePrompt.trim()).append("\n");
         } else {
-            systemPrompt.append("Analyze the following HTTP request for vulnerabilities...").append("\n");
+            systemPrompt
+                    .append("Analyze the following HTTP request for vulnerabilities...")
+                    .append("\n");
         }
 
         return systemPrompt.toString();

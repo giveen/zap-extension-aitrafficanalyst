@@ -1,3 +1,22 @@
+/*
+ * Zed Attack Proxy (ZAP) and its related class files.
+ *
+ * ZAP is an HTTP/HTTPS proxy for assessing web application security.
+ *
+ * Copyright 2026 The ZAP Development Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.zaproxy.zap.extension.aitrafficanalyst.ai;
 
 import java.lang.reflect.Array;
@@ -10,8 +29,8 @@ import org.parosproxy.paros.extension.ExtensionLoader;
 /**
  * Uses the official ZAP LLM add-on (ExtensionLlm) via reflection.
  *
- * <p>This project is a standalone add-on and does not have a published Maven dependency for the
- * LLM add-on, so we avoid compile-time linking.
+ * <p>This project is a standalone add-on and does not have a published Maven dependency for the LLM
+ * add-on, so we avoid compile-time linking.
  */
 public class LlmAddonClient implements AnalystLlmClient {
 
@@ -174,20 +193,23 @@ public class LlmAddonClient implements AnalystLlmClient {
                     Constant.messages.getString("aitrafficanalyst.llm.missing.detailed"));
         }
 
-        Object comms = ext.getClass()
-                .getMethod("getCommunicationService", String.class, String.class)
-                .invoke(ext, COMMS_KEY, OUTPUT_TAB_NAME);
+        Object comms =
+                ext.getClass()
+                        .getMethod("getCommunicationService", String.class, String.class)
+                        .invoke(ext, COMMS_KEY, OUTPUT_TAB_NAME);
 
         if (comms == null) {
             String issue = getCommsIssue();
             if (issue != null && !issue.trim().isEmpty()) {
                 throw new IllegalStateException(issue);
             }
-            throw new IllegalStateException(Constant.messages.getString("aitrafficanalyst.llm.notConfigured"));
+            throw new IllegalStateException(
+                    Constant.messages.getString("aitrafficanalyst.llm.notConfigured"));
         }
 
         try {
-            Object response = comms.getClass().getMethod("chat", String.class).invoke(comms, prompt);
+            Object response =
+                    comms.getClass().getMethod("chat", String.class).invoke(comms, prompt);
             return response != null ? response.toString() : "";
         } catch (InvocationTargetException e) {
             // Method.invoke wraps whatever the LLM add-on's chat() threw (bad API key, network
@@ -214,7 +236,9 @@ public class LlmAddonClient implements AnalystLlmClient {
 
     private void evictCommsService(Extension ext) {
         try {
-            ext.getClass().getMethod("removeCommunicationService", String.class).invoke(ext, COMMS_KEY);
+            ext.getClass()
+                    .getMethod("removeCommunicationService", String.class)
+                    .invoke(ext, COMMS_KEY);
         } catch (Exception ignored) {
             // Best-effort cleanup; if unavailable the next call simply reuses the accumulated
             // memory, which is a cost/robustness concern but not a functional failure.

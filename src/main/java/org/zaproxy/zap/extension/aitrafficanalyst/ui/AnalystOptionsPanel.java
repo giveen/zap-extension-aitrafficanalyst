@@ -73,14 +73,14 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         JLabel lblLlmConfig =
-            new JLabel(
-                org.parosproxy.paros.Constant.messages.getString(
-                    "aitrafficanalyst.options.llmConfig"));
+                new JLabel(
+                        org.parosproxy.paros.Constant.messages.getString(
+                                "aitrafficanalyst.options.llmConfig"));
 
         JTextArea txtLlmConfig =
-            new JTextArea(
-                org.parosproxy.paros.Constant.messages.getString(
-                    "aitrafficanalyst.options.llmConfig.desc"));
+                new JTextArea(
+                        org.parosproxy.paros.Constant.messages.getString(
+                                "aitrafficanalyst.options.llmConfig.desc"));
         txtLlmConfig.setEditable(false);
         txtLlmConfig.setLineWrap(true);
         txtLlmConfig.setWrapStyleWord(true);
@@ -185,10 +185,10 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
                     int confirm =
                             JOptionPane.showConfirmDialog(
                                     this,
-                                org.parosproxy.paros.Constant.messages.getString(
-                                    "aitrafficanalyst.options.reset.confirm"),
-                                org.parosproxy.paros.Constant.messages.getString(
-                                    "aitrafficanalyst.options.reset.title"),
+                                    org.parosproxy.paros.Constant.messages.getString(
+                                            "aitrafficanalyst.options.reset.confirm"),
+                                    org.parosproxy.paros.Constant.messages.getString(
+                                            "aitrafficanalyst.options.reset.title"),
                                     JOptionPane.YES_NO_OPTION);
 
                     if (confirm == JOptionPane.YES_OPTION) {
@@ -332,24 +332,24 @@ public class AnalystOptionsPanel extends AbstractParamPanel {
         String llmStatusText;
         if (extension == null || extension.getLlmClient() == null) {
             llmStatusText =
-                org.parosproxy.paros.Constant.messages.getString(
-                    "aitrafficanalyst.options.llmConfig.status.unavailable");
+                    org.parosproxy.paros.Constant.messages.getString(
+                            "aitrafficanalyst.options.llmConfig.status.unavailable");
         } else if (extension.getLlmClient().isConfigured()) {
             llmStatusText =
-                org.parosproxy.paros.Constant.messages.getString(
-                    "aitrafficanalyst.options.llmConfig.status.configured");
+                    org.parosproxy.paros.Constant.messages.getString(
+                            "aitrafficanalyst.options.llmConfig.status.configured");
         } else {
             String issue = extension.getLlmClient().getCommsIssue();
             if (issue != null && !issue.trim().isEmpty()) {
-            llmStatusText =
-                org.parosproxy.paros.Constant.messages.getString(
-                        "aitrafficanalyst.options.llmConfig.status.notConfigured")
-                    + " "
-                    + issue;
+                llmStatusText =
+                        org.parosproxy.paros.Constant.messages.getString(
+                                        "aitrafficanalyst.options.llmConfig.status.notConfigured")
+                                + " "
+                                + issue;
             } else {
-            llmStatusText =
-                org.parosproxy.paros.Constant.messages.getString(
-                    "aitrafficanalyst.options.llmConfig.status.notConfigured");
+                llmStatusText =
+                        org.parosproxy.paros.Constant.messages.getString(
+                                "aitrafficanalyst.options.llmConfig.status.notConfigured");
             }
         }
         if (lblLlmStatus != null) {
