@@ -54,6 +54,16 @@ Common dev commands:
 
 Install the add-on in ZAP via **Manage Add-ons → Install Add-on from File…** and select the `.zap` file in `build/zapAddOn/bin/`.
 
+### Releasing
+
+Releases are cut automatically by [`.github/workflows/release.yml`](.github/workflows/release.yml) once `Java CI` passes on `main`. To ship a new version:
+
+1. Bump `version` in [`gradle.properties`](gradle.properties).
+2. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [x.y.z] - YYYY-MM-DD` (add a fresh empty `## [Unreleased]` above it for the next round).
+3. Push to `main`.
+
+Once CI passes, the release workflow builds the `.zap`, tags the commit `vx.y.z`, and publishes a GitHub Release with that section of the changelog as its notes and the `.zap` attached. Pushes that don't change the version (docs, CI tweaks, refactors, etc.) don't trigger a release.
+
 ---
 
 ## How to Use
