@@ -167,7 +167,29 @@ public class LlmAddonClient implements AnalystLlmClient {
             throw new IllegalStateException(Constant.messages.getString("aitrafficanalyst.llm.notConfigured"));
         }
 
-        Object response = comms.getClass().getMethod("chat", String.class).invoke(comms, prompt);
-        return response != null ? response.toString() : "";
+        try {
+            Object response = comms.getClass().getMethod("chat", String.class).invoke(comms, prompt);
+            return response != null ? response.toString() : "";
+        } finally {
+            // The LLM add-on caches one LlmCommunicationService per comms key and retains a
+            // rolling window of prior chat turns on it, intended for its own interactive
+            // multi-turn chat UI. Every analysis we send is already a fully self-contained
+            // prompt (we build our own bounded session-context summary), so evict the cached
+            // service after each call. Otherwise every subsequent analysis silently resends
+            // several previous analyses' full request/response bodies as "history", inflating
+            // token cost and leaking one page's traffic content into another page's analysis.
+            // This only drops our cached service reference; any visible chat tab in the LLM
+            // add-on's UI is left in place for transparency.
+            evictCommsService(ext);
+        }
+    }
+
+    private void evictCommsService(Extension ext) {
+        try {
+            ext.getClass().getMethod("removeCommunicationService", String.class).invoke(ext, COMMS_KEY);
+        } catch (Exception ignored) {
+            // Best-effort cleanup; if unavailable the next call simply reuses the accumulated
+            // memory, which is a cost/robustness concern but not a functional failure.
+        }
     }
 }

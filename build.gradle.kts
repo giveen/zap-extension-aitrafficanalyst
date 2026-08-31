@@ -1,6 +1,5 @@
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.tasks.bundling.Jar
-import org.gradle.language.jvm.tasks.ProcessResources
 import org.zaproxy.gradle.addon.AddOnStatus
 
 plugins {
@@ -10,7 +9,9 @@ plugins {
     id("org.zaproxy.common")
 }
 
-// Post-process generated ZapAddOn.xml to ensure required version tags are present.
+// Post-process generated ZapAddOn.xml to inject a <semver> tag (not emitted by the plugin
+// version in use). The <dependencies> block is declared properly via the zapAddOn manifest
+// DSL below and needs no manual patching.
 // NOTE: The add-on Gradle plugin writes the generated manifest under build/zapAddOn/ZapAddOn.xml.
 tasks.named("generateZapAddOnManifest") {
     doLast {
@@ -31,27 +32,10 @@ tasks.named("generateZapAddOnManifest") {
                 }
             }
 
-            // Inject hard dependency on the official LLM add-on.
-            if (!content.contains("<dependencies>")) {
-                val depsBlock = "    <dependencies>\n        <addon>llm</addon>\n    </dependencies>\n"
-                content =
-                    when {
-                        content.contains("</url>") -> content.replaceFirst("</url>", "</url>\n$depsBlock")
-                        content.contains("</author>") ->
-                            content.replaceFirst("</author>", "</author>\n$depsBlock")
-                        else -> content
-                    }
-            }
-
             manifestFile.writeText(content)
-            println("Manually patched ZapAddOn.xml (semver + dependencies).")
+            println("Manually patched ZapAddOn.xml (semver).")
         }
     }
-}
-
-// The add-on Gradle plugin generates ZapAddOn.xml; exclude the template copy to avoid duplicates.
-tasks.named<ProcessResources>("processResources") {
-    exclude("ZapAddOn.xml")
 }
 
 tasks.named<Jar>("jar") {
@@ -78,6 +62,14 @@ zapAddOn {
         description.set("AI-driven traffic analysis using the ZAP LLM add-on.")
         extensions {
             register("org.zaproxy.zap.extension.aitrafficanalyst.ExtensionAiAnalyst")
+        }
+        // Hard dependency on the official ZAP LLM add-on, which supplies all provider
+        // configuration and LLM communication. Matches the pattern used by the official
+        // openapi add-on's own LLM integration (ExtensionOpenApiLlm).
+        dependencies {
+            addOns {
+                register("llm")
+            }
         }
     }
 }

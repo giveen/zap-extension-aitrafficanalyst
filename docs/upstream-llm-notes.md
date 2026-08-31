@@ -23,3 +23,18 @@ This add-on depends on the ZAP **LLM** add-on for provider configuration and mes
 ### 5) Non-interactive / headless usage
 - Ability for add-ons to query whether a provider is configured and retrieve a human-readable “what’s missing” message.
 - Some of this exists today; having a stable interface/contract for it would help integrations.
+
+### 6) A stateless one-shot chat call
+- `ExtensionLlm.getCommunicationService(commsKey, outputTabName)` caches one
+  `LlmCommunicationService` per comms key, and that service keeps a `MessageWindowChatMemory`
+  (last 10 messages) across calls — a good fit for the add-on's own interactive chat UI, but a
+  footgun for callers whose "analysis" is really a series of independent, already
+  self-contained prompts (each with its own embedded context, as ours is). Every call after
+  the first silently resends prior calls' full prompts as "history", inflating token cost and
+  letting one page's traffic content bleed into an unrelated page's analysis.
+- We work around this today by calling `removeCommunicationService(commsKey)` after every
+  `chat()` call, which drops the cached service (so the next call gets fresh memory) without
+  touching the visible chat tab. A first-class stateless variant — e.g. a `chatOnce(String)` on
+  `LlmCommunicationService`, or a `getCommunicationService(...)` option that opts out of
+  persisted memory — would let add-ons doing one-shot analysis avoid needing to know about this
+  cache-eviction workaround at all.
